@@ -1,6 +1,9 @@
 // Android glue: NativeActivity + AAudio low-latency output + software-drawn UI.  No Java, no WebView.
 #include <android/log.h>
 #include <android/native_window.h>
+#include <android/window.h>
+#include <android/input.h>
+#include <android/keycodes.h>
 #include <android_native_app_glue.h>
 #include <aaudio/AAudio.h>
 #include <jni.h>
