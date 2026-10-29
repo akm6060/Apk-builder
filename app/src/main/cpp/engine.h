@@ -1,72 +1,114 @@
+// Native audio engine: an exact port of the web version's WebAudio graph.
 #pragma once
 #include <atomic>
 #include <cstdint>
+#include <cstring>
+#include <cmath>
 #include <vector>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
 
-constexpr int NKEYS = 72, NVOICES = 16, NEQ = 7;
-extern const float EQ_FREQ[NEQ];
+namespace sk {
 
-struct OscP { int wave = 0; float freq = 262; float vol = 0; int semi = 0; int cents = 0; };
+constexpr int NVOICE = 32;      // slots (soft limit MAXACT active)
+constexpr int MAXACT = 22;
+constexpr int NGLOB = 24;
+constexpr int NSOUND = 29;      // floats describing one sound (see Engine::noteOn)
 
-struct Params {
-    OscP o[4];
-    int oscOn[4] = {1, 1, 1, 1};
-    float a = .01f, d = .5f, s = 5.f, r = .8f;
-    int adsrOn = 1;
-    int mode = 0;                       // oscillator 4: 0 tone, 1 FM, 2 AM
-    float eq[NEQ] = {0, 0, 0, 0, 0, 0, 0};
-    int eqOn = 1;
-    float cut = 100, res = 0, lfoRate = 5, vib = 0, trem = 0;
-    int sndOn = 1;
-    int echoOn = 0, reverbOn = 0;
-    float echoTime = 350, echoFb = 35, echoMix = 30, revDecay = 2, revDamp = 40, revMix = 30;
-    int fxOn = 1;
-    float preamp = 6, tuneA4 = 440;
-    int transpose = 0;
-    int poly = 1;
+// global parameter indices (all "effective" values; JS already applied the on/off toggles)
+enum { G_CUT, G_RES, G_LR, G_VIB, G_TRM, G_WOB, G_CH, G_EQ0 /*7*/, G_ECHO = 14, G_ET, G_EFB, G_REV, G_PRE = 18 };
+
+struct OscP { float on, w, f, v, t, c; };
+struct SoundP { float mode, a, d, s, r; OscP o[4]; };
+
+struct Biquad {                 // transposed direct form II, double precision
+    double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
+    inline float run(float x) {
+        double y = b0 * x + z1;
+        z1 = b1 * x - a1 * y + z2;
+        z2 = b2 * x - a2 * y;
+        return (float)y;
+    }
+    void set(double B0, double B1, double B2, double A0, double A1, double A2) {
+        double i = 1.0 / A0; b0 = B0 * i; b1 = B1 * i; b2 = B2 * i; a1 = A1 * i; a2 = A2 * i;
+    }
 };
 
-struct Biquad {
-    float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
-    inline float proc(float x) { float y = b0 * x + z1; z1 = b1 * x - a1 * y + z2; z2 = b2 * x - a2 * y; return y; }
+struct Ir {                     // partitioned impulse-response spectra (2 channels)
+    int P = 0;
+    std::vector<float> re[2], im[2];
 };
 
 struct Voice {
-    bool active = false, held = false, rel = false;
-    int key = -1; uint32_t age = 0;
-    int n = 0, w[4] = {0, 0, 0, 0};
-    float ph[4] = {0, 0, 0, 0}, dt[4] = {0, 0, 0, 0}, g[4] = {0, 0, 0, 0};
-    int mode = 0, w4 = 0; float fmD = 0, amD = 0, ph4 = 0, dt4 = 0;
-    int stage = 0; float env = 0, aInc = 0, dDec = 0, sustLeft = 0, relCoef = 0; bool sustHold = true;
+    bool act = false, fast = false;
+    int id = -1;
+    uint32_t age = 0;
+    int nc = 0;                 // carriers
+    float base[4], og[4], ph[4];
+    int wave[4];
+    int mode = 0;               // 0 tone, 1 FM, 2 AM
+    bool md = false;
+    float mph = 0, minc = 0, mdepth = 0, amBase = 1; int mwave = 0;
+    int stage = 0; long cnt = 0, aN = 1, dN = 1, sN = 0, rN = 1;
+    bool hold = true;
+    float lev = 0, relCoef = 0.999f, rtau = 0.01f;
+    long relLeft = 0;
 };
 
 class Engine {
 public:
-    Engine();
-    void init(float sampleRate);                 // call only while audio is stopped
-    void setParams(const Params& p);             // UI thread
-    void noteOn(int key)  { push(0, key); }
-    void noteOff(int key) { push(1, key); }
-    void setHold(bool h)  { push(h ? 2 : 3, 0); }
-    void allOff()         { push(4, 0); }
-    void render(float* out, int frames);         // audio thread: interleaved stereo
+    void init(float sampleRate);
+    // control (any thread)
+    void noteOn(int id, const float* snd /*NSOUND*/, float ratio);
+    void noteOff(int id);
+    void cut(int id);
+    void allOff();
+    void setGlobal(const float* g /*NGLOB*/);
+    void setDrone(bool on, float base);
+    void setReverb(float decay, float damp);     // rebuilds the impulse response (worker thread)
+    // audio thread
+    void render(float* out, int frames);          // interleaved stereo
+    ~Engine();
 private:
-    struct Ev { uint8_t t, k; };
-    Ev q_[512]; std::atomic<uint32_t> qh_{0}, qt_{0};
-    void push(int t, int k);
-    std::atomic<uint32_t> seq_{0}; Params shared_; uint32_t lastSeq_ = 0xFFFFFFFFu; Params cur_;
-    float sr_ = 48000;
-    Voice v_[NVOICES]; uint32_t age_ = 0; bool hold_ = false;
-    void handle(const Ev& e); void applyParams();
-    void startVoice(int key); void releaseVoice(Voice& v, float tau); int pickVoice();
-    void block(float* out, int n);
-    // shaping
-    float lfoPh_ = 0, lfoInc_ = 0, vibC_ = 0, tremD_ = 0; bool lpOn_ = false, eqOn_ = false;
-    Biquad lp_, eq_[NEQ];
+    struct Ev { int type, id; float ratio; float snd[NSOUND]; };
+    static const int RN = 512;
+    Ev ring[RN]; std::atomic<uint32_t> rh{0}, rt{0}; std::mutex pm;
+    void push(const Ev& e);
+    void apply(const Ev& e);
+    float sr = 48000; bool inited = false;
+    std::atomic<float> G[NGLOB];
+    std::atomic<int> droneOn{0}; std::atomic<float> droneBase{130.81f};
+    Voice v[NVOICE]; uint32_t ageC = 0;
+    // sample tables
+    // chain state
+    float lfoPh = 0, vibS = 0, trmS = 0, wobS = 0, chS = 0, echoS = 0, revS = 0, preS = 1;
+    float cutS = 20000, resS = 0.7f, etS = 0.35f, efbS = 0.35f, lrS = 5;
+    float eqS[7] = {0,0,0,0,0,0,0};
+    Biquad lp, eq[7];
+
     // echo
-    std::vector<float> eb_; int ew_ = 0; float eDelayT_ = 0, eDelay_ = 0, eFb_ = 0, eLp_ = 0, eInT_ = 0, eIn_ = 0, eWetT_ = 0, eWet_ = 0;
-    // reverb
-    struct Comb { std::vector<float> b; int i = 0; float lp = 0, g = .8f; };
-    Comb c_[4]; std::vector<float> ap_[2]; int api_[2] = {0, 0}; float rDamp_ = .3f, rInT_ = 0, rIn_ = 0, rWetT_ = 0, rWet_ = 0;
-    float preT_ = 1, pre_ = 1;
+    std::vector<float> dl; int dw = 0; Biquad efl;
+    // chorus
+    std::vector<float> cd; int cw = 0; float cph = 0;
+    // drone
+    float dph[4] = {0,0,0,0}; float dg = 0; Biquad dlp;
+    // reverb convolver
+    static const int CB = 1024, CN = 2048;
+    std::vector<float> fftC, fftS;       // twiddles
+    std::vector<float> inRe, inIm, accRe, accIm, tmpRe, tmpIm;
+    std::vector<float> fdlRe, fdlIm; int fpos = 0; int cfill = 0;
+    std::vector<float> inHist; float outB[2][CB]; int outPos = 0;
+    Ir* curIr = nullptr; std::atomic<Ir*> newIr{nullptr}; std::atomic<Ir*> retired{nullptr};
+    std::vector<int> rev; int pmax = 2;
+    bool convRun = false;
+    void fftCore(float* re, float* im);
+    void convBlock();
+    // IR worker
+    std::thread wk; std::mutex wm; std::condition_variable wc; bool wreq = false, wquit = false; float wdec = 2, wdmp = 40;
+    void worker();
+    void ctlUpdate(float lfo);
+    void startVoice(const Ev& e);
 };
+
+} // namespace sk
