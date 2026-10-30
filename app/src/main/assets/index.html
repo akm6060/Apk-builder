@@ -50,11 +50,11 @@ small{color:var(--mut)}
 const $=s=>document.querySelector(s),mk=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}},sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 const WT=['sine','triangle','sawtooth','square'],WN=['Sine','Tri','Saw','Sqr'],LIM=[[60,9000],[60,9000],[60,9000],[0,128]],EF=[128,256,512,1000,3000,6000,9000];
-const Z=Object.assign({pa:11,kw:48,dz:4,bw:60,bh:62,blk:false,two:false,lat:'balanced',eq:[0,0,0,0,0,0,0],eo:false,ro:false,et:350,ef:35,em:30,rd:2,rp:40,rm:30},ld('kbZ',{}));
+const Z=Object.assign({pa:11,kw:48,dz:0,bw:60,bh:62,blk:false,two:false,lat:'balanced',eq:[0,0,0,0,0,0,0],eo:false,ro:false,et:350,ef:35,em:30,rd:2,rp:40,rm:30},ld('kbZ',{}));
 const M=Object.assign({cut:100,res:0,lr:5,vib:0,trm:0,wob:0,ch:0,tr:0,at:440},ld('kbM',{}));
 const T=Object.assign({o:[1,1,1,1],a:1,eq:1,fx:1,sn:1},ld('kbTg',{}));
 const sZ=()=>sv('kbZ',Z),sM=()=>sv('kbM',M),sT=()=>sv('kbTg',T);
-if(!Array.isArray(Z.eq)||Z.eq.length!==7)Z.eq=[0,0,0,0,0,0,0];Z.et=Math.min(500,Z.et);Z.rd=Math.min(3,Z.rd);
+if(!Array.isArray(Z.eq)||Z.eq.length!==7)Z.eq=[0,0,0,0,0,0,0];Z.et=Math.min(500,Z.et);Z.rd=Math.min(3,Z.rd);if(!Z.v2){Z.dz=0;Z.v2=1;sZ()}
 const snd=()=>({o:[0,1,2,3].map(k=>({w:0,f:k<3?262:64,v:k?0:100,t:0,c:0})),e:{a:.01,d:.5,s:5,r:.8},m:0});
 const SN=[snd(),snd()];let tg=0,poly=true,hold=false,two=false,AC,MS,G={};
 const syncs=[],refresh=()=>syncs.forEach(f=>f()),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -136,7 +136,9 @@ KB.forEach((el,k)=>{let wi=0;for(let m=36;m<=107;m++){const id=k*100+m,n=m%12,b=
 const maxPos=()=>Math.max(0,42*Z.kw-$('#kw0').clientWidth);
 function layout(){POS=clamp(POS,0,maxPos());KB.forEach(el=>{el.style.setProperty('--kw',Z.kw+'px');el.style.transform='translateX('+-POS+'px)'});blacks.forEach(b=>{b.style.width=Z.kw*Z.bw/100+'px';b.style.height=Z.bh+'%';b.style.left=b.dataset.wi*Z.kw-Z.kw*Z.bw/200+'px'})}
 /* touches use touch events: e.touches lists every finger still down, so a lost 'up' can never leave a key stuck */
-const okHit=(el,x,y)=>{const r=el.getBoundingClientRect();if(Z.blk&&el.classList.contains('w')&&y-r.top<r.height*Z.bh/100)return false;return Math.min(x-r.left,r.right-x)>=Math.min(Z.dz,r.width/4)};
+const okHit=(el,x,y)=>{const r=el.getBoundingClientRect();
+ if(Z.blk&&el.classList.contains('w')&&y-r.top<r.height*Z.bh/100){for(const b of el.parentNode.querySelectorAll('.b')){const q=b.getBoundingClientRect();if(x>q.left-6&&x<q.right+6)return false}}
+ return Z.dz<=0||Math.min(x-r.left,r.right-x)>=Math.min(Z.dz,r.width/4)};
 const keyOf=t=>{const el=t&&t.closest?t.closest('[data-id]'):null;return el?{el,id:+el.dataset.id}:null};
 function syncT(e){const act=new Set([...e.touches].map(t=>t.identifier));for(const[k,id]of[...Tt]){if(!act.has(k)){Tt.delete(k);stop(id,1)}}}
 const kbs=$('#kbs');
@@ -232,7 +234,7 @@ const setp=panel('setp','Settings');
 setp.append(mk('h3',0,'Keys'),
  bigRow('Keyboard position',()=>[0,maxPos()],()=>POS,v=>{POS=clamp(v,0,maxPos());layout()},()=>Z.kw,' px'),
  bigRow('Key width',()=>[24,90],()=>Z.kw,v=>{const n=clamp(Math.round(v),24,90);POS=POS*n/Z.kw;Z.kw=n;sZ();layout()},()=>2,' px'),
- sl('Black key width (% of white)',10,120,1,()=>Z.bw,v=>{Z.bw=v;sZ();layout()},' %'),sl('Black key height',30,100,1,()=>Z.bh,v=>{Z.bh=v;sZ();layout()},' %'),sl('Key edge dead zone',0,12,1,()=>Z.dz,v=>{Z.dz=v;sZ()},' px'));
+ sl('Black key width (% of white)',10,120,1,()=>Z.bw,v=>{Z.bw=v;sZ();layout()},' %'),sl('Black key height',30,100,1,()=>Z.bh,v=>{Z.bh=v;sZ();layout()},' %'),sl('Key edge dead zone (0 = every touch plays)',0,12,1,()=>Z.dz,v=>{Z.dz=v;sZ()},' px'));
 const tw=(x,k,f)=>{const b=mk('button');const sh=()=>{b.textContent=x(Z[k]);b.classList.toggle('act',!!Z[k]&&typeof Z[k]==='boolean')};b.onclick=()=>{f();sZ();refresh()};syncs.push(sh);sh();const r=mk('div','row');r.append(b);return r};
 setp.append(tw(v=>'Block white keys in black-key area: '+(v?'On':'Off'),'blk',()=>Z.blk=!Z.blk),
  tw(v=>'Keyboards: '+(v?'Two':'One'),'two',()=>setTwo(!Z.two)),
