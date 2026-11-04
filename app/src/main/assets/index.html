@@ -25,8 +25,10 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 #capTitle{font-size:17px;font-weight:700}
 #capSub{font-size:12px;color:#ffb38f;margin-top:2px}
 #capSteps{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.35;color:#d6e0ea}
+#caption.teach{max-width:min(560px,92vw)}#caption.teach #capSteps{list-style:none;padding:0}#caption.teach .tl{font-size:16px;line-height:1.45;color:#fff}#caption.teach #capSub{font-size:13px;color:#7dd3fc;font-weight:700}#caption .prog{margin-top:4px;color:#ffb38f;letter-spacing:3px}#ctl #teach.on{background:linear-gradient(135deg,#f59e0b,#ef4444)}
 #capMus{font-size:12.5px;margin-top:6px;line-height:1.35}#capMus .mc{color:#ff4a2a}#capMus .ms{color:#2f9bff}
-#caption.mini #capMus{display:block}
+#caption.mini #caption.teach{max-width:min(560px,92vw)}#caption.teach #capSteps{list-style:none;padding:0}#caption.teach .tl{font-size:16px;line-height:1.45;color:#fff}#caption.teach #capSub{font-size:13px;color:#7dd3fc;font-weight:700}#caption .prog{margin-top:4px;color:#ffb38f;letter-spacing:3px}#ctl #teach.on{background:linear-gradient(135deg,#f59e0b,#ef4444)}
+#capMus{display:block}
 #chips button.cond{border-color:rgba(255,160,120,.5)}#chips button.post{border-color:rgba(120,220,150,.5)}
 #infoBox{position:fixed;inset:0;background:rgba(10,14,20,.86);z-index:16;display:none;overflow:auto;padding:18px 14px 30px}
 #infoBox.show{display:block}
@@ -110,7 +112,7 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
   <div id="ctl">
     <button id="pause">❚❚</button><button id="stop">■ Stop</button>
     <input id="speed" type="range" min="0.4" max="1.8" step="0.1" value="1"><span id="speedV">1.0×</span>
-    <button id="mus" class="on">💪 Muscles</button><button id="outfit">👗 Outfit</button><button id="colour">🎨 Colour</button><button id="skin">🧑🏽 Skin</button><button id="feet">👣 Feet</button><button id="count" class="on">🔊 Count</button><button id="view">View: Auto</button>
+    <button id="teach">🎓 Teach</button><button id="mus" class="on">💪 Muscles</button><button id="outfit">👗 Outfit</button><button id="colour">🎨 Colour</button><button id="skin">🧑🏽 Skin</button><button id="feet">👣 Feet</button><button id="count" class="on">🔊 Count</button><button id="view">View: Auto</button>
     <form id="cmdForm"><input id="cmd" placeholder="Type a command…" autocomplete="off"></form>
   </div>
 </div>
@@ -127,6 +129,8 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
   <p><code>open your mouth</code> <code>show tongue</code> <code>show tonsils</code> / <code>say aah</code> <code>close mouth</code>. The tonsil view has Brodsky grade 0–4 and an "inflamed" option.</p>
   <h3>Physiotherapy</h3>
   <p>Say a whole routine: <code>exercise for backache</code>, <code>sciatica</code>, <code>lumbar</code>, <code>cervical</code>, <code>calf pain</code>, <code>knee</code>, <code>shoulder</code>, <code>body building</code>. Or one exercise: <code>bridge</code>, <code>cat cow</code>, <code>piriformis</code>, <code>chin tuck</code>, <code>calf raise</code>, <code>push ups</code>, <code>plank</code>…</p>
+  <h3>🎓 Teacher mode</h3>
+  <p>Turn on <b>🎓 Teach</b> and pick any exercise – or say <code>teach me bridge</code>, <code>explain squats</code>, <code>ब्रिज सिखाओ</code>. The model explains why the exercise helps, then each step slowly while holding the position, the breathing, does it slowly with you, then a second model in red shows the common mistakes next to the correct way, followed by what not to do – then you do the repetitions. Works in Hindi and English (EN/हिं button), also for whole disease programmes.</p>
   <h3>Diseases (रोग अनुसार)</h3>
   <p>Open the <b>Diseases</b> tab or say: <code>cervical spondylosis</code> <code>frozen shoulder</code> <code>knee arthritis</code> <code>hip arthritis</code> <code>varicose veins</code> <code>piriformis syndrome</code> <code>sciatica</code> <code>low back pain</code> <code>ankylosing spondylitis</code> <code>heel pain</code> <code>ankle sprain</code> <code>rotator cuff</code> <code>tennis elbow</code> <code>osteoporosis</code>. You get the condition summary, dose, red flags and the full exercise programme.</p>
   <h3>Posture (सही मुद्रा)</h3>

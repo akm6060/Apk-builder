@@ -95,8 +95,8 @@ public class MainActivity extends Activity {
                 tts.setSpeechRate(1.0f);
                 tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                     @Override public void onStart(String id) { }
-                    @Override public void onDone(String id) { if (id.startsWith("g")) ui.post(() -> { ttsBusy = false; restartSoon(250); }); }
-                    @Override public void onError(String id) { ui.post(() -> { ttsBusy = false; restartSoon(250); }); }
+                    @Override public void onDone(String id) { if (id.startsWith("gT")) js("window.onSpeakDone && window.onSpeakDone('" + id.substring(1) + "')"); if (id.startsWith("g")) ui.post(() -> { ttsBusy = false; restartSoon(250); }); }
+                    @Override public void onError(String id) { if (id.startsWith("gT")) js("window.onSpeakDone && window.onSpeakDone('" + id.substring(1) + "')"); ui.post(() -> { ttsBusy = false; restartSoon(250); }); }
                 });
             }
         });
@@ -233,6 +233,17 @@ public class MainActivity extends Activity {
                 String id = (guard ? "g" : "n") + System.nanoTime();
                 if (guard && wantListen) { ttsBusy = true; stopRecognition(); }
                 if (Build.VERSION.SDK_INT >= 21) tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, id);
+            });
+        }
+        @JavascriptInterface public void speakEx(String text, String lang, float rate, String id) {
+            ui.post(() -> {
+                if (!ttsReady) { js("window.onSpeakDone && window.onSpeakDone('" + id + "')"); return; }
+                String[] p = lang.split("-");
+                tts.setLanguage(p.length > 1 ? new Locale(p[0], p[1]) : new Locale(p[0]));
+                tts.setSpeechRate(rate);
+                if (wantListen) { ttsBusy = true; stopRecognition(); }
+                tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), "g" + id);
+                tts.setSpeechRate(1.0f);
             });
         }
         @JavascriptInterface public void stopSpeaking() { ui.post(() -> { if (ttsReady) tts.stop(); ttsBusy = false; restartSoon(200); }); }
