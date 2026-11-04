@@ -78,7 +78,7 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
 #loading p{text-align:center;opacity:.75;margin:0}
 .spin{width:44px;height:44px;border-radius:50%;border:4px solid rgba(255,255,255,.15);border-top-color:var(--acc);animation:sp 1s linear infinite;margin:18px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
-#toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.8);padding:12px 18px;border-radius:14px;opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:85vw}
+#toast{white-space:pre-line;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.8);padding:12px 18px;border-radius:14px;opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:85vw}
 #toast.show{opacity:1}
 #helpBox{position:fixed;inset:0;background:rgba(10,14,20,.88);z-index:15;display:none;overflow:auto;padding:24px 20px 40px;font-size:14px;line-height:1.5}
 #helpBox.show{display:block}
@@ -110,7 +110,7 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
   <div id="ctl">
     <button id="pause">❚❚</button><button id="stop">■ Stop</button>
     <input id="speed" type="range" min="0.4" max="1.8" step="0.1" value="1"><span id="speedV">1.0×</span>
-    <button id="mus" class="on">💪 Muscles</button><button id="outfit">👗 Outfit</button><button id="count" class="on">🔊 Count</button><button id="view">View: Auto</button>
+    <button id="mus" class="on">💪 Muscles</button><button id="outfit">👗 Outfit</button><button id="colour">🎨 Colour</button><button id="skin">🧑🏽 Skin</button><button id="feet">👣 Feet</button><button id="count" class="on">🔊 Count</button><button id="view">View: Auto</button>
     <form id="cmdForm"><input id="cmd" placeholder="Type a command…" autocomplete="off"></form>
   </div>
 </div>
@@ -131,6 +131,10 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
   <p>Open the <b>Diseases</b> tab or say: <code>cervical spondylosis</code> <code>frozen shoulder</code> <code>knee arthritis</code> <code>hip arthritis</code> <code>varicose veins</code> <code>piriformis syndrome</code> <code>sciatica</code> <code>low back pain</code> <code>ankylosing spondylitis</code> <code>heel pain</code> <code>ankle sprain</code> <code>rotator cuff</code> <code>tennis elbow</code> <code>osteoporosis</code>. You get the condition summary, dose, red flags and the full exercise programme.</p>
   <h3>Posture (सही मुद्रा)</h3>
   <p>Say <code>sleeping posture</code> <code>side sleeping</code> <code>sitting posture</code> <code>text neck</code> <code>standing posture</code> <code>how to lift</code> <code>walking posture</code> <code>running posture</code>. Two models show it – green ✔ correct, red ✘ wrong.</p>
+  <h3>Full-body models: Ananya &amp; Rohit</h3>
+  <p><b>👗 Outfit</b> changes the dress: sports bra &amp; shorts, yoga wear, kurta &amp; churidar, salwar suit, saree look, T-shirt &amp; track pants, bra &amp; briefs (anatomy demo), muscle-anatomy view, 3D casual suit (Ananya) / vest &amp; shorts, gym shorts, kurta pyjama, dhoti kurta, tracksuit, briefs, muscle view (Rohit). <b>🎨 Colour</b> changes the dress colour, <b>🧑🏽 Skin</b> the skin tone, <b>👣 Feet</b> barefoot / socks / shoes / juttis.</p>
+  <h3>Talk to the models</h3>
+  <p>Tap any model – they wave and talk to you. They look at you, shift their weight, nod when you give a command, cheer you on during reps and clap when a programme is finished.</p>
   <h3>Muscles &amp; outfits</h3>
   <p><b>💪 Muscles</b>: working muscles glow <span style="color:#ff4a2a">red</span>, stretched muscles glow <span style="color:#2f9bff">blue</span>, brighter as the movement deepens. <b>👗 Outfit</b> changes clothing colour of the selected model(s).</p>
   <h3>Hindi examples</h3>
