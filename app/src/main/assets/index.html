@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>BodyCoach 3D</title>
+<style>
+:root{--glass:rgba(18,24,34,.72);--line:rgba(255,255,255,.12);--acc:#ff7a45;--acc2:#4fb3ff;--txt:#eef3f8}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#dfe5ec;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Devanagari",sans-serif;color:var(--txt)}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+#top{position:fixed;top:env(safe-area-inset-top,0);left:0;right:0;display:flex;align-items:center;gap:8px;padding:8px 10px;pointer-events:none}
+#top>*{pointer-events:auto}
+.brand{background:var(--glass);backdrop-filter:blur(10px);border-radius:14px;padding:7px 12px;font-weight:700;letter-spacing:.3px;font-size:15px;white-space:nowrap}
+.brand b{color:var(--acc)}
+#who{display:flex;gap:4px;background:var(--glass);backdrop-filter:blur(10px);border-radius:14px;padding:4px}
+#who button{padding:6px 11px;border-radius:10px;font-size:13px;font-weight:600;opacity:.75}
+#who button.on{background:linear-gradient(135deg,var(--acc),#ff4d6d);opacity:1}
+.sp{flex:1}
+.iconbtn{background:var(--glass);backdrop-filter:blur(10px);border-radius:12px;min-width:40px;height:36px;padding:0 10px;font-weight:700;font-size:14px}
+#caption{position:fixed;top:calc(env(safe-area-inset-top,0px) + 56px);left:10px;max-width:min(430px,62vw);background:var(--glass);backdrop-filter:blur(12px);border-radius:16px;padding:10px 14px;opacity:0;transform:translateY(-8px);transition:.3s;pointer-events:none}
+#caption.show{opacity:1;transform:none;pointer-events:auto}
+#caption.mini #capSteps{display:none}#caption.mini{padding:8px 12px}
+#capTitle{font-size:17px;font-weight:700}
+#capSub{font-size:12px;color:#ffb38f;margin-top:2px}
+#capSteps{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.35;color:#d6e0ea}
+#reps{margin-top:6px;font-weight:800;color:var(--acc2);font-size:15px}
+#heard{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 214px);transform:translateX(-50%) translateY(10px);background:rgba(0,0,0,.65);padding:8px 14px;border-radius:20px;font-size:15px;opacity:0;transition:.25s;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+#heard.show{opacity:1;transform:translateX(-50%)}
+#mic{position:fixed;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 200px);width:66px;height:66px;border-radius:50%;background:linear-gradient(135deg,#ff7a45,#ff3d6e);box-shadow:0 8px 24px rgba(255,61,110,.45);display:grid;place-items:center;z-index:5}
+#mic svg{width:30px;height:30px;fill:#fff}
+#mic.on{animation:pulse 1.2s infinite;background:linear-gradient(135deg,#22c55e,#0ea5e9)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(14,165,233,.6)}70%{box-shadow:0 0 0 22px rgba(14,165,233,0)}100%{box-shadow:0 0 0 0 rgba(14,165,233,0)}}
+#drawer{position:fixed;left:0;right:0;bottom:0;background:var(--glass);backdrop-filter:blur(14px);border-top-left-radius:20px;border-top-right-radius:20px;padding:6px 8px calc(env(safe-area-inset-bottom,0px) + 8px);transition:transform .3s}
+body.collapsed #drawer{transform:translateY(calc(100% - 44px))}
+body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
+#toggleDrawer{display:block;margin:0 auto 4px;width:48px;height:8px;border-radius:4px;background:rgba(255,255,255,.35)}
+#tabs,#chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px}
+#tabs::-webkit-scrollbar,#chips::-webkit-scrollbar{display:none}
+#tabs button{flex:none;padding:6px 12px;border-radius:12px;font-size:13px;font-weight:700;opacity:.7;line-height:1.1;text-align:center}
+#tabs button small{display:block;font-size:10px;font-weight:500;opacity:.8}
+#tabs button.on{opacity:1;background:rgba(255,255,255,.14);box-shadow:inset 0 -2px 0 var(--acc)}
+#chips{margin-top:6px;flex-wrap:wrap;max-height:96px;overflow-y:auto}
+#chips button{flex:none;padding:8px 13px;border-radius:20px;background:rgba(255,255,255,.1);border:1px solid var(--line);font-size:13.5px}
+#chips button:active{transform:scale(.96)}
+#chips button.cur{background:var(--acc);border-color:var(--acc)}
+#chips button.routine{background:linear-gradient(135deg,#4fb3ff,#7c5cff);border:0;font-weight:700}
+#ctl{display:flex;align-items:center;gap:6px;margin-top:8px}
+#ctl button{background:rgba(255,255,255,.1);border-radius:10px;height:34px;padding:0 10px;font-size:13px;font-weight:600;flex:none}
+#ctl button.on{background:rgba(79,179,255,.35)}
+#ctl input[type=range]{width:80px;accent-color:var(--acc)}
+#cmdForm{flex:1;display:flex;min-width:90px}
+#cmd{flex:1;min-width:0;background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:10px;height:34px;color:#fff;padding:0 10px;font-size:14px;outline:none}
+#speedV{font-size:12px;width:30px}
+#insetFrame{position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 56px);border-radius:18px;box-shadow:0 0 0 3px rgba(255,255,255,.85),0 10px 30px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .3s;overflow:hidden}
+#insetFrame.show{opacity:1}
+#insetLabel{position:absolute;left:0;right:0;top:0;padding:6px 10px;font-size:12px;background:linear-gradient(rgba(0,0,0,.55),transparent);pointer-events:none}
+#oralLabels span{position:absolute;transform:translate(-50%,-50%);font-size:11px;background:rgba(0,0,0,.55);padding:2px 6px;border-radius:8px;white-space:nowrap;pointer-events:none;border:1px solid rgba(255,255,255,.25)}
+#oralCtl{position:absolute;left:0;right:0;bottom:0;display:none;gap:3px;padding:6px;justify-content:center;flex-wrap:wrap;background:linear-gradient(transparent,rgba(0,0,0,.6));pointer-events:auto}
+#oralCtl button{background:rgba(255,255,255,.15);border-radius:8px;padding:4px 7px;font-size:11px;font-weight:700}
+#oralCtl button.on{background:var(--acc)}
+#insetFrame.show #oralCtl{pointer-events:auto}
+#insetFrame.show{pointer-events:none}
+#loading{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(circle at 50% 40%,#283445,#0f141c);z-index:20;transition:opacity .6s}
+#loading.done{opacity:0;pointer-events:none}
+#loading h1{font-size:30px;margin:0 0 6px;text-align:center}#loading h1 b{color:var(--acc)}
+#loading p{text-align:center;opacity:.75;margin:0}
+.spin{width:44px;height:44px;border-radius:50%;border:4px solid rgba(255,255,255,.15);border-top-color:var(--acc);animation:sp 1s linear infinite;margin:18px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+#toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.8);padding:12px 18px;border-radius:14px;opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:85vw}
+#toast.show{opacity:1}
+#helpBox{position:fixed;inset:0;background:rgba(10,14,20,.88);z-index:15;display:none;overflow:auto;padding:24px 20px 40px;font-size:14px;line-height:1.5}
+#helpBox.show{display:block}
+#helpBox h2{margin:0 0 8px;color:var(--acc)}#helpBox h3{margin:16px 0 4px;color:var(--acc2);font-size:15px}
+#helpBox code{background:rgba(255,255,255,.12);padding:1px 6px;border-radius:6px}
+@media (max-width:560px){.brand span{display:none}#who button{padding:6px 8px;font-size:12px}#caption{max-width:calc(100vw - 20px);right:10px}#capSteps{font-size:12px}}
+@media (orientation:landscape) and (max-height:500px){#chips{max-height:44px}#caption{max-width:38vw}#capSteps{display:none}#mic{bottom:150px;width:56px;height:56px}#heard{bottom:160px}}
+</style>
+<script type="importmap">{"imports":{"three":"./lib/build/three.module.js"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="top">
+  <div class="brand">Body<b>Coach</b> <span>3D</span></div>
+  <div id="who"></div>
+  <div class="sp"></div>
+  <button class="iconbtn" id="lang">EN</button>
+  <button class="iconbtn" id="help">?</button>
+</div>
+<div id="caption"><div id="capTitle"></div><div id="capSub"></div><ol id="capSteps"></ol><div id="reps"></div></div>
+<div id="insetFrame"><div id="insetLabel"></div><div id="oralLabels"></div>
+  <div id="oralCtl"><button data-g="0">Gr 0</button><button data-g="1" class="on">Gr 1</button><button data-g="2">Gr 2</button><button data-g="3">Gr 3</button><button data-g="4">Gr 4</button><button data-g="red">Inflamed</button><button id="labelsBtn" class="on">Labels</button></div>
+</div>
+<div id="heard"></div>
+<button id="mic" aria-label="Voice command"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg></button>
+<div id="drawer">
+  <button id="toggleDrawer" aria-label="Show/hide panel"></button>
+  <div id="tabs"></div>
+  <div id="chips"></div>
+  <div id="ctl">
+    <button id="pause">❚❚</button><button id="stop">■ Stop</button>
+    <input id="speed" type="range" min="0.4" max="1.8" step="0.1" value="1"><span id="speedV">1.0×</span>
+    <button id="count" class="on">🔊 Count</button><button id="view">View: Auto</button>
+    <form id="cmdForm"><input id="cmd" placeholder="Type a command…" autocomplete="off"></form>
+  </div>
+</div>
+<div id="toast"></div>
+<div id="helpBox">
+  <h2>How to use BodyCoach 3D</h2>
+  <p>Tap the <b>microphone</b> and speak. It keeps listening until you tap it again. Use the <b>EN / हिं</b> button to switch between English and Hindi commands. You can also tap the buttons or type a command.</p>
+  <h3>Choose who follows</h3>
+  <p><b>All</b> = all three models together. Or say a name first: <code>Priya sit</code>, <code>Arjun jump</code>, <code>Riya do push ups</code>.</p>
+  <h3>Basic commands</h3>
+  <p><code>sit</code> <code>stand up</code> <code>walk</code> <code>run</code> <code>jump</code> <code>wave</code> <code>namaste</code> <code>turn around</code> <code>kneel</code> <code>squat</code> <code>bend forward</code> <code>bend backward</code> <code>hands up</code> <code>stand on one leg</code> <code>hands and knees</code> <code>lie on your back</code> <code>lie on abdomen</code> <code>lie on side</code> <code>stop</code></p>
+  <h3>Mouth / throat</h3>
+  <p><code>open your mouth</code> <code>show tongue</code> <code>show tonsils</code> / <code>say aah</code> <code>close mouth</code>. The tonsil view has Brodsky grade 0–4 and an "inflamed" option.</p>
+  <h3>Physiotherapy</h3>
+  <p>Say a whole routine: <code>exercise for backache</code>, <code>sciatica</code>, <code>lumbar</code>, <code>cervical</code>, <code>calf pain</code>, <code>knee</code>, <code>shoulder</code>, <code>body building</code>. Or one exercise: <code>bridge</code>, <code>cat cow</code>, <code>piriformis</code>, <code>chin tuck</code>, <code>calf raise</code>, <code>push ups</code>, <code>plank</code>…</p>
+  <h3>Hindi examples</h3>
+  <p><code>बैठो</code> <code>खड़े हो</code> <code>चलो</code> <code>कूदो</code> <code>मुंह खोलो</code> <code>जीभ दिखाओ</code> <code>गला दिखाओ</code> <code>पीठ के बल लेटो</code> <code>पेट के बल लेटो</code> <code>कमर दर्द</code> <code>गर्दन</code> <code>रुको</code></p>
+  <h3>Offline voice</h3>
+  <p>Everything works without internet. For voice commands offline, Android needs its offline speech pack: Settings → Google → (Voice / Speech) → Offline speech recognition → download English (India) and Hindi.</p>
+  <h3>Camera</h3>
+  <p>Drag to rotate, pinch to zoom. The <b>View</b> button cycles Auto / Front / Side / Above / Top.</p>
+  <p style="opacity:.7">Tap anywhere to close.</p>
+</div>
+<div id="loading"><div><h1>Body<b>Coach</b> 3D</h1><p>Voice-guided 3D models for physiotherapy & fitness</p><div class="spin"></div><p id="loadTxt">Loading…</p></div></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

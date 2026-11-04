@@ -1,0 +1,34 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.akm.bodycoach'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.akm.bodycoach'
+        minSdk 21
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+    signingConfigs {
+        release {
+            storeFile file('bodycoach.jks')
+            storePassword 'bodycoach123'
+            keyAlias 'bodycoach'
+            keyPassword 'bodycoach123'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    androidResources { noCompress += ['glb', 'js', 'html'] }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
