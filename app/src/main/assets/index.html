@@ -25,6 +25,16 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 #capTitle{font-size:17px;font-weight:700}
 #capSub{font-size:12px;color:#ffb38f;margin-top:2px}
 #capSteps{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.35;color:#d6e0ea}
+#capMus{font-size:12.5px;margin-top:6px;line-height:1.35}#capMus .mc{color:#ff4a2a}#capMus .ms{color:#2f9bff}
+#caption.mini #capMus{display:block}
+#chips button.cond{border-color:rgba(255,160,120,.5)}#chips button.post{border-color:rgba(120,220,150,.5)}
+#infoBox{position:fixed;inset:0;background:rgba(10,14,20,.86);z-index:16;display:none;overflow:auto;padding:18px 14px 30px}
+#infoBox.show{display:block}
+#infoBox .ib{max-width:640px;margin:0 auto;background:rgba(30,38,52,.95);border-radius:18px;padding:16px 18px;font-size:14px;line-height:1.45}
+#infoBox h2{margin:0 0 6px;color:var(--acc);font-size:20px}#infoBox h2 small{display:block;font-size:13px;color:#cbd5e1;font-weight:500}
+#infoBox h3{margin:12px 0 4px;color:var(--acc2);font-size:14px}#infoBox ul,#infoBox ol{margin:0;padding-left:20px}
+#infoBox ol li{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer}#infoBox ol li span{display:block;font-size:11.5px;color:#94a3b8}
+.ibtn{display:flex;gap:8px;margin-top:14px}.ibtn button{flex:1;padding:10px;border-radius:12px;background:rgba(255,255,255,.1);font-weight:700}.ibtn button:first-child{background:linear-gradient(135deg,var(--acc),#ff4d6d)}
 #reps{margin-top:6px;font-weight:800;color:var(--acc2);font-size:15px}
 #heard{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 214px);transform:translateX(-50%) translateY(10px);background:rgba(0,0,0,.65);padding:8px 14px;border-radius:20px;font-size:15px;opacity:0;transition:.25s;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 #heard.show{opacity:1;transform:translateX(-50%)}
@@ -46,11 +56,11 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
 #chips button:active{transform:scale(.96)}
 #chips button.cur{background:var(--acc);border-color:var(--acc)}
 #chips button.routine{background:linear-gradient(135deg,#4fb3ff,#7c5cff);border:0;font-weight:700}
-#ctl{display:flex;align-items:center;gap:6px;margin-top:8px}
+#ctl{display:flex;align-items:center;gap:6px;margin-top:8px;overflow-x:auto;scrollbar-width:none}#ctl::-webkit-scrollbar{display:none}
 #ctl button{background:rgba(255,255,255,.1);border-radius:10px;height:34px;padding:0 10px;font-size:13px;font-weight:600;flex:none}
 #ctl button.on{background:rgba(79,179,255,.35)}
 #ctl input[type=range]{width:80px;accent-color:var(--acc)}
-#cmdForm{flex:1;display:flex;min-width:90px}
+#cmdForm{flex:1;display:flex;min-width:130px}
 #cmd{flex:1;min-width:0;background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:10px;height:34px;color:#fff;padding:0 10px;font-size:14px;outline:none}
 #speedV{font-size:12px;width:30px}
 #insetFrame{position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 56px);border-radius:18px;box-shadow:0 0 0 3px rgba(255,255,255,.85),0 10px 30px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .3s;overflow:hidden}
@@ -87,7 +97,7 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
   <button class="iconbtn" id="lang">EN</button>
   <button class="iconbtn" id="help">?</button>
 </div>
-<div id="caption"><div id="capTitle"></div><div id="capSub"></div><ol id="capSteps"></ol><div id="reps"></div></div>
+<div id="caption"><div id="capTitle"></div><div id="capSub"></div><ol id="capSteps"></ol><div id="capMus"></div><div id="reps"></div></div>
 <div id="insetFrame"><div id="insetLabel"></div><div id="oralLabels"></div>
   <div id="oralCtl"><button data-g="0">Gr 0</button><button data-g="1" class="on">Gr 1</button><button data-g="2">Gr 2</button><button data-g="3">Gr 3</button><button data-g="4">Gr 4</button><button data-g="red">Inflamed</button><button id="labelsBtn" class="on">Labels</button></div>
 </div>
@@ -100,11 +110,12 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
   <div id="ctl">
     <button id="pause">❚❚</button><button id="stop">■ Stop</button>
     <input id="speed" type="range" min="0.4" max="1.8" step="0.1" value="1"><span id="speedV">1.0×</span>
-    <button id="count" class="on">🔊 Count</button><button id="view">View: Auto</button>
+    <button id="mus" class="on">💪 Muscles</button><button id="outfit">👗 Outfit</button><button id="count" class="on">🔊 Count</button><button id="view">View: Auto</button>
     <form id="cmdForm"><input id="cmd" placeholder="Type a command…" autocomplete="off"></form>
   </div>
 </div>
 <div id="toast"></div>
+<div id="infoBox"></div>
 <div id="helpBox">
   <h2>How to use BodyCoach 3D</h2>
   <p>Tap the <b>microphone</b> and speak. It keeps listening until you tap it again. Use the <b>EN / हिं</b> button to switch between English and Hindi commands. You can also tap the buttons or type a command.</p>
@@ -116,6 +127,12 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
   <p><code>open your mouth</code> <code>show tongue</code> <code>show tonsils</code> / <code>say aah</code> <code>close mouth</code>. The tonsil view has Brodsky grade 0–4 and an "inflamed" option.</p>
   <h3>Physiotherapy</h3>
   <p>Say a whole routine: <code>exercise for backache</code>, <code>sciatica</code>, <code>lumbar</code>, <code>cervical</code>, <code>calf pain</code>, <code>knee</code>, <code>shoulder</code>, <code>body building</code>. Or one exercise: <code>bridge</code>, <code>cat cow</code>, <code>piriformis</code>, <code>chin tuck</code>, <code>calf raise</code>, <code>push ups</code>, <code>plank</code>…</p>
+  <h3>Diseases (रोग अनुसार)</h3>
+  <p>Open the <b>Diseases</b> tab or say: <code>cervical spondylosis</code> <code>frozen shoulder</code> <code>knee arthritis</code> <code>hip arthritis</code> <code>varicose veins</code> <code>piriformis syndrome</code> <code>sciatica</code> <code>low back pain</code> <code>ankylosing spondylitis</code> <code>heel pain</code> <code>ankle sprain</code> <code>rotator cuff</code> <code>tennis elbow</code> <code>osteoporosis</code>. You get the condition summary, dose, red flags and the full exercise programme.</p>
+  <h3>Posture (सही मुद्रा)</h3>
+  <p>Say <code>sleeping posture</code> <code>side sleeping</code> <code>sitting posture</code> <code>text neck</code> <code>standing posture</code> <code>how to lift</code> <code>walking posture</code> <code>running posture</code>. Two models show it – green ✔ correct, red ✘ wrong.</p>
+  <h3>Muscles &amp; outfits</h3>
+  <p><b>💪 Muscles</b>: working muscles glow <span style="color:#ff4a2a">red</span>, stretched muscles glow <span style="color:#2f9bff">blue</span>, brighter as the movement deepens. <b>👗 Outfit</b> changes clothing colour of the selected model(s).</p>
   <h3>Hindi examples</h3>
   <p><code>बैठो</code> <code>खड़े हो</code> <code>चलो</code> <code>कूदो</code> <code>मुंह खोलो</code> <code>जीभ दिखाओ</code> <code>गला दिखाओ</code> <code>पीठ के बल लेटो</code> <code>पेट के बल लेटो</code> <code>कमर दर्द</code> <code>गर्दन</code> <code>रुको</code></p>
   <h3>Offline voice</h3>
