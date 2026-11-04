@@ -77,7 +77,6 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
 @media (max-width:560px){.brand span{display:none}#who button{padding:6px 8px;font-size:12px}#caption{max-width:calc(100vw - 20px);right:10px}#capSteps{font-size:12px}}
 @media (orientation:landscape) and (max-height:500px){#chips{max-height:44px}#caption{max-width:38vw}#capSteps{display:none}#mic{bottom:150px;width:56px;height:56px}#heard{bottom:160px}}
 </style>
-<script type="importmap">{"imports":{"three":"./lib/build/three.module.js"}}</script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -126,6 +125,16 @@ body.collapsed #mic{bottom:60px}body.collapsed #heard{bottom:70px}
   <p style="opacity:.7">Tap anywhere to close.</p>
 </div>
 <div id="loading"><div><h1>Body<b>Coach</b> 3D</h1><p>Voice-guided 3D models for physiotherapy & fitness</p><div class="spin"></div><p id="loadTxt">Loading…</p></div></div>
-<script type="module" src="app.js"></script>
+<script>
+(function(){
+  function show(msg){ var t=document.getElementById('loadTxt'); if(t){ t.style.color='#ffb3a0'; t.style.whiteSpace='pre-wrap'; t.style.maxWidth='88vw'; t.style.fontSize='13px'; t.textContent='Problem: '+msg; } var s=document.querySelector('.spin'); if(s) s.style.display='none'; }
+  window.__showErr=function(e){ show((e&&(e.message||e.reason&&e.reason.message))||String(e)); };
+  window.addEventListener('error',function(e){ show((e.message||'script error')+(e.filename?' @'+e.filename.split('/').pop()+':'+e.lineno:'')); });
+  window.addEventListener('unhandledrejection',function(e){ show(e.reason&&e.reason.message||String(e.reason)); });
+  try{ var c=document.createElement('canvas'); if(!c.getContext('webgl2')) show('This phone\'s WebView does not support WebGL 2 (3D graphics). Please update "Android System WebView" and "Chrome" from Play Store, then reopen.'); }catch(e){}
+  window.__watchdog=setTimeout(function(){ if(!window.__ready) show('Still loading after 90 s. '+(document.getElementById('loadTxt')||{}).textContent+'\nPlease update Android System WebView from Play Store and reopen.'); },90000);
+})();
+</script>
+<script src="bundle.js"></script>
 </body>
 </html>

@@ -65,14 +65,21 @@ public class MainActivity extends Activity {
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         web.setBackgroundColor(0xff0f141c);
-        web.setWebChromeClient(new WebChromeClient());
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
+                if (m.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR) android.util.Log.e("BodyCoach", m.message() + " @" + m.sourceId() + ":" + m.lineNumber());
+                return true;
+            }
+        });
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 WebResourceResponse r = assetLoader.shouldInterceptRequest(request.getUrl());
                 if (r != null) {
                     String p = request.getUrl().getPath();
-                    if (p != null && p.endsWith(".js")) r.setMimeType("text/javascript");
+                    if (p != null && p.endsWith(".js")) { r.setMimeType("text/javascript"); r.setEncoding("utf-8"); }
+                    else if (p != null && p.endsWith(".html")) { r.setMimeType("text/html"); r.setEncoding("utf-8"); }
                     else if (p != null && p.endsWith(".glb")) r.setMimeType("model/gltf-binary");
                 }
                 return r;
