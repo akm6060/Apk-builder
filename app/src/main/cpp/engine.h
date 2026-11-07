@@ -11,7 +11,7 @@
 
 namespace sk {
 
-constexpr int NVOICE = 32;      // slots (soft limit MAXACT active)
+constexpr int NVOICE = 48;      // slots (soft limit MAXACT active)
 constexpr int MAXACT = 22;
 constexpr int NGLOB = 24;
 constexpr int NSOUND = 29;      // floats describing one sound (see Engine::noteOn)

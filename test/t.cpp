@@ -45,5 +45,9 @@ int main(){
     { float s[NSOUND]; snd(s,0,.01f,.3f,5,.5f,2,262,100,0,524,50); float mxd=0,prev=0;
       for(int i=0;i<200;i++){ e.noteOn(60+(i%3),s,1.f); auto a=run(2); for(size_t j=0;j<a.size();j+=2){ mxd=std::max(mxd,fabsf(a[j]-prev)); prev=a[j]; } if(i%2) e.noteOff(60+(i%3)); }
       printf("retrigger max step %.4f (saw partials, steep edges expected below 0.8)\n",mxd); if(mxd>0.8f) fails++; e.allOff(); run(300); }
+    // 6. slot flood: 300 notes with 5 s releases; every new note must still be audible
+    { float s[NSOUND]; snd(s,0,.01f,.3f,5,5.f,0,262,100); int silent=0;
+      for(int i=0;i<300;i++){ e.noteOn(36+(i%60),s,1.f); auto a=run(1); float m=0; for(float x:a) m=std::max(m,fabsf(x)); auto b2=run(2); for(float x:b2) m=std::max(m,fabsf(x)); if(m<1e-4f) silent++; if(i%3==2) e.noteOff(36+((i-2)%60)); }
+      printf("flood: %d of 300 new notes silent\n",silent); if(silent) fails++; e.allOff(); run(400); }
     puts(fails?"FAILED":"ENGINE TESTS PASSED"); return fails;
 }

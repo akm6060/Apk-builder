@@ -108,7 +108,7 @@ void Engine::startVoice(const Ev& e) {
         if (c) { c->fast = true; c->stage = 5; c->rtau = 0.008f; c->relCoef = expf(-1.f / (0.008f * sr)); c->relLeft = (long)(0.12f * sr); }
     }
     Voice* n = nullptr; for (auto& q : v) if (!q.act) { n = &q; break; }
-    if (!n) return;
+    if (!n) { n = &v[0]; for (auto& q : v) if (q.age < n->age) n = &q; }   // never drop a note: reuse the oldest slot
     Voice& o = *n; o = Voice(); o.act = true; o.id = e.id; o.age = ++ageC;
     float mode = s[0], A = std::max(s[1], 0.010f), D = std::max(s[2], 0.010f), S = s[3], R = std::max(s[4], 0.02f);
     o.aN = std::max(1L, (long)(A * sr)); o.dN = std::max(1L, (long)(D * sr)); o.sN = (long)(S * sr); o.rN = std::max(1L, (long)(R * sr));
