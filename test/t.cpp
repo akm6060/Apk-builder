@@ -3,6 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <vector>
+#include <atomic>
 using namespace sk;
 static void snd(float* s, float mode, float a, float d, float sus, float r, int w1, float f1, float v1, int w2=0, float f2=262, float v2=0, float f4=64, float v4=0, int w4=0) {
     s[0]=mode; s[1]=a; s[2]=d; s[3]=sus; s[4]=r;
@@ -49,5 +50,33 @@ int main(){
     { float s[NSOUND]; snd(s,0,.01f,.3f,5,5.f,0,262,100); int silent=0;
       for(int i=0;i<300;i++){ e.noteOn(36+(i%60),s,1.f); auto a=run(1); float m=0; for(float x:a) m=std::max(m,fabsf(x)); auto b2=run(2); for(float x:b2) m=std::max(m,fabsf(x)); if(m<1e-4f) silent++; if(i%3==2) e.noteOff(36+((i-2)%60)); }
       printf("flood: %d of 300 new notes silent\n",silent); if(silent) fails++; e.allOff(); run(400); }
+
+    // 7. lost-event race: audio thread renders continuously while another thread plays notes; every note-on must start
+    { std::atomic<bool> go{true}; float s[NSOUND]; snd(s,0,.01f,.3f,5,.5f,0,262,100); std::vector<float> b2(2*64);
+      std::thread rd([&]{ while(go) e.render(b2.data(),64); });
+      int lost=0, N=6000;
+      for(int n=0;n<N;n++){ int id=40+(n%12); e.noteOn(id,s,1.f,1.f,0.f); bool ok=false;
+        for(int w=0;w<4000&&!ok;w++){ if(e.alive(id)) ok=true; else std::this_thread::sleep_for(std::chrono::microseconds(10)); }
+        if(!ok) lost++; if(n%2) e.noteOff(id); }
+      go=false; rd.join();
+      printf("race test: %d of %d note-ons never started\n",lost,N); if(lost) fails++;
+      e.allOff(); run(400); }
+    // 8. key-position volume (small levels so tanh stays linear)
+    { float s[NSOUND]; snd(s,0,.01f,.3f,5,.5f,0,262,100); e.noteOn(60,s,1.f,0.05f,0.f); run(60); auto a=run(30); float m1=0; for(float x:a) m1=std::max(m1,fabsf(x));
+      e.noteGain(60,0.10f); run(40); auto b=run(30); float m2=0; for(float x:b) m2=std::max(m2,fabsf(x));
+      printf("gain 0.05 peak %.4f -> after change to 0.10 peak %.4f (expect ~2x)\n",m1,m2); if(!(m2>m1*1.8f&&m2<m1*2.2f)) fails++;
+      e.allOff(); run(200); }
+    // 9. glide: A3 held, then E4 (ratio 1.4983) with 1 s glide; track pitch by zero crossings, check no jump and arrival
+    { float s[NSOUND]; snd(s,0,.01f,.3f,5,.5f,0,220,100); e.noteOn(57,s,1.f,1.f,1.0f); run(60);
+      float r2=powf(2.f,7.f/12.f); e.noteOn(64,s,r2,1.f,1.0f);
+      std::vector<float> all; for(int i=0;i<250;i++){ e.render(buf.data(),192); for(int j=0;j<192;j++) all.push_back(buf[j*2]); }   // 1 s
+      auto freqAt=[&](double t0,double t1){ int zc=0; size_t a0=(size_t)(t0*48000),a1=(size_t)(t1*48000); for(size_t i=a0+1;i<a1;i++) if(all[i-1]<0&&all[i]>=0) zc++; return zc/(t1-t0); };
+      double fa=freqAt(0.02,0.12),fm=freqAt(0.45,0.55),fe=freqAt(0.9,1.0); run(80); std::vector<float> after; for(int i=0;i<40;i++){ e.render(buf.data(),192); for(int j=0;j<192;j++) after.push_back(buf[j*2]); }
+      int zc=0; for(size_t i=1;i<after.size();i++) if(after[i-1]<0&&after[i]>=0) zc++; double ff=zc/(after.size()/48000.0);
+      float mxs=0; for(size_t i=1;i<all.size();i++) mxs=std::max(mxs,fabsf(all[i]-all[i-1]));
+      printf("glide: start %.1f Hz, middle %.1f Hz, end of 1s %.1f Hz, after %.1f Hz (target %.1f), max sample step %.3f\n",fa,fm,fe,ff,220*r2,mxs);
+      if(!(fa>220&&fa<250&&fm>235&&fm<300&&ff>325&&ff<335&&mxs<0.12f)) { fails++; puts("  GLIDE?"); }
+      int act=0; for(int k=0;k<2;k++) act+=e.alive(57)?1:0; printf("old key voice taken over (alive57=%d, alive64=%d)\n",e.alive(57),e.alive(64)); if(e.alive(57)||!e.alive(64)) fails++;
+      e.allOff(); run(300); }
     puts(fails?"FAILED":"ENGINE TESTS PASSED"); return fails;
 }

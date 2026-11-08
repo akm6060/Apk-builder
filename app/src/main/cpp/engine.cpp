@@ -85,7 +85,9 @@ void Engine::push(const Ev& e) {
     if (h - t >= RN) return;
     ring[h % RN] = e; rh.store(h + 1, std::memory_order_release);
 }
-void Engine::noteOn(int id, const float* s, float ratio) { Ev e; e.type = 1; e.id = id; e.ratio = ratio; memcpy(e.snd, s, sizeof(float) * NSOUND); push(e); }
+void Engine::noteOn(int id, const float* s, float ratio, float gain, float glide) { Ev e; e.type = 1; e.id = id; e.ratio = ratio; e.gain = gain < 0 ? 0 : gain > 1 ? 1 : gain; e.gl = glide; memcpy(e.snd, s, sizeof(float) * NSOUND); push(e); }
+void Engine::noteGain(int id, float g) { Ev e; memset(&e, 0, sizeof e); e.type = 5; e.id = id; e.gain = g < 0 ? 0 : g > 1 ? 1 : g; push(e); }
+bool Engine::alive(int id) { for (auto& q : v) if (q.act && q.id == id && !q.fast && q.stage != 5 && q.stage != 4) return true; return false; }
 void Engine::noteOff(int id) { Ev e; memset(&e, 0, sizeof e); e.type = 2; e.id = id; push(e); }
 void Engine::cut(int id) { Ev e; memset(&e, 0, sizeof e); e.type = 3; e.id = id; push(e); }
 void Engine::allOff() { Ev e; memset(&e, 0, sizeof e); e.type = 4; push(e); }
@@ -98,6 +100,17 @@ void Engine::setReverb(float decay, float damp) {
 
 void Engine::startVoice(const Ev& e) {
     const float* s = e.snd;
+    // glide (legato): the most recent audible note of ANOTHER key is taken over and slides to the new pitch
+    bool tk = false; float tph[4] = {0,0,0,0}, tmph = 0, tlev = 0, tcurOct = 0; int tstage = 0; long tcnt = 0;
+    if (e.gl > 0.f) {
+        Voice* p = nullptr;
+        for (auto& q : v) if (q.act && !q.fast && q.id != e.id && q.lev > ((q.stage >= 4) ? 0.05f : 0.f) && (!p || q.age > p->age)) p = &q;
+        if (p) {
+            tk = true; for (int k = 0; k < 4; k++) tph[k] = p->ph[k];
+            tmph = p->mph; tlev = p->lev; tstage = p->stage; tcnt = p->cnt; tcurOct = log2f(p->rat) + p->gOct;
+            p->act = false;
+        }
+    }
     // free the same key (web: cut(id) -> 12 ms fade)
     for (auto& q : v) if (q.act && q.id == e.id && !q.fast) { q.fast = true; q.stage = 5; q.rtau = 0.008f; q.relCoef = expf(-1.f / (0.008f * sr)); q.relLeft = (long)(0.12f * sr); }
     int act = 0; for (auto& q : v) if (q.act && !q.fast) act++;
@@ -109,7 +122,7 @@ void Engine::startVoice(const Ev& e) {
     }
     Voice* n = nullptr; for (auto& q : v) if (!q.act) { n = &q; break; }
     if (!n) { n = &v[0]; for (auto& q : v) if (q.age < n->age) n = &q; }   // never drop a note: reuse the oldest slot
-    Voice& o = *n; o = Voice(); o.act = true; o.id = e.id; o.age = ++ageC;
+    Voice& o = *n; o = Voice(); o.act = true; o.id = e.id; o.age = ++ageC; o.rat = e.ratio; o.vg = o.vgT = e.gain;
     float mode = s[0], A = std::max(s[1], 0.010f), D = std::max(s[2], 0.010f), S = s[3], R = std::max(s[4], 0.02f);
     o.aN = std::max(1L, (long)(A * sr)); o.dN = std::max(1L, (long)(D * sr)); o.sN = (long)(S * sr); o.rN = std::max(1L, (long)(R * sr));
     o.hold = S >= 5.f; o.stage = 0; o.cnt = 0; o.lev = 0; o.rtau = std::max(0.04f, R) / 4.f;
@@ -129,10 +142,19 @@ void Engine::startVoice(const Ev& e) {
         const float* m = O + 18; o.mwave = (int)m[1]; o.minc = m[2] / sr; o.mph = 0;
         if (o.mode == 2) { o.mdepth = m[3] / 200.f; o.amBase = 1.f - m[3] / 200.f; } else o.mdepth = m[3] / 100.f * 0.5f;
     }
+    if (tk) {
+        for (int k = 0; k < o.nc; k++) o.ph[k] = tph[k];
+        if (o.md) o.mph = tmph;
+        o.gOct = tcurOct - log2f(e.ratio); o.gStep = -o.gOct / (std::max(0.01f, e.gl) * sr);
+        o.lev = tlev;
+        if (tstage <= 3) { o.stage = tstage; o.cnt = tcnt; if (o.stage == 3 && o.cnt >= o.sN) o.cnt = 0; }
+        else { o.stage = 6; o.cnt = 0; o.l0 = tlev; }
+    }
 }
 
 void Engine::apply(const Ev& e) {
     if (e.type == 1) startVoice(e);
+    else if (e.type == 5) { for (auto& q : v) if (q.act && q.id == e.id && !q.fast) q.vgT = e.gain; }
     else if (e.type == 2) {
         for (auto& q : v) if (q.act && q.id == e.id && !q.fast && q.stage != 5) { q.stage = 5; q.relLeft = (long)((q.rtau * 4 * 1.6f + 0.05f) * 3.f * sr); }
     } else if (e.type == 3) {
@@ -234,8 +256,11 @@ void Engine::ctlUpdate(float lfo) {
 void Engine::render(float* out, int frames) {
     static thread_local bool fd = false; if (!fd) { flushDenormals(); fd = true; }
     // events
-    for (uint32_t t = rt.load(std::memory_order_relaxed), h = rh.load(std::memory_order_acquire); t != h; t++) apply(ring[t % RN]);
-    rt.store(rh.load(std::memory_order_acquire), std::memory_order_release);
+    {   // consume exactly the events that were applied (an event pushed meanwhile must stay queued, never skipped)
+        uint32_t t = rt.load(std::memory_order_relaxed), h = rh.load(std::memory_order_acquire);
+        for (; t != h; t++) apply(ring[t % RN]);
+        rt.store(t, std::memory_order_release);
+    }
 
     const float alS = 1.f - expf(-1.f / (sr * 0.03f));
     const int CH = 32;
@@ -253,6 +278,12 @@ void Engine::render(float* out, int frames) {
         }
         for (auto& q : v) {
             if (!q.act) continue;
+            float gm = 1.f;
+            if (q.gStep != 0.f) {
+                gm = exp2f(q.gOct);
+                q.gOct += q.gStep * nF;
+                if ((q.gStep > 0.f && q.gOct >= 0.f) || (q.gStep < 0.f && q.gOct <= 0.f)) { q.gOct = 0; q.gStep = 0; }
+            }
             for (int i = 0; i < nF; i++) {
                 // envelope
                 float env;
@@ -262,6 +293,7 @@ void Engine::render(float* out, int frames) {
                     case 2: env = 0.7f; break;
                     case 3: env = 0.7f; if (++q.cnt >= q.sN) { q.stage = 4; q.cnt = 0; } break;
                     case 4: env = 0.7f * (1.f - (float)q.cnt / q.rN); if (++q.cnt >= q.rN) { q.act = false; env = 0; } break;
+                    case 6: { float x = (float)q.cnt / (0.03f * sr); if (x > 1.f) x = 1.f; env = q.l0 + (0.7f - q.l0) * x * x * (3 - 2 * x); if (++q.cnt >= (long)(0.03f * sr)) { q.stage = q.hold ? 2 : 3; q.cnt = 0; } break; }
                     default: q.lev *= q.relCoef; env = q.lev; if (q.lev < 2e-4f || --q.relLeft <= 0) { q.act = false; env = 0; } break;
                 }
                 if (q.stage != 5) q.lev = env;
@@ -274,12 +306,13 @@ void Engine::render(float* out, int frames) {
                 }
                 float s = 0, fm = (q.md && q.mode == 1) ? 1.f + q.mdepth * mod : 1.f;
                 for (int k = 0; k < q.nc; k++) {
-                    float dt = std::min(0.49f, q.base[k] / sr * vib[i] * fm); if (dt < 0) dt = 0;
+                    float dt = std::min(0.49f, q.base[k] / sr * vib[i] * fm * gm); if (dt < 0) dt = 0;
                     q.ph[k] += dt; if (q.ph[k] >= 1.f) q.ph[k] -= 1.f;
                     s += q.og[k] * waveS(q.wave[k], q.ph[k], dt);
                 }
                 if (q.md && q.mode == 2) s *= q.amBase + q.mdepth * mod;
-                vm[i] += s * env;
+                q.vg += (q.vgT - q.vg) * alS * 1.5f;
+                vm[i] += s * env * q.vg;
             }
         }
         // chain

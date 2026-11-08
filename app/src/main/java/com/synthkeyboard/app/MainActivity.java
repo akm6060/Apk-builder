@@ -37,7 +37,9 @@ public class MainActivity extends Activity {
     /** Bridge used by the web page. */
     private final class Bridge {
         @JavascriptInterface public boolean available() { return NativeAudio.loaded; }
-        @JavascriptInterface public void on(int id, String csv, double ratio) { NativeAudio.noteOn(id, parse(csv), (float) ratio); }
+        @JavascriptInterface public void on(int id, String csv, double ratio, double gain, double glide) { NativeAudio.noteOn(id, parse(csv), (float) ratio, (float) gain, (float) glide); }
+        @JavascriptInterface public void gain(int id, double g) { NativeAudio.noteGain(id, (float) g); }
+        @JavascriptInterface public boolean alive(int id) { return NativeAudio.alive(id); }
         @JavascriptInterface public void off(int id) { NativeAudio.noteOff(id); }
         @JavascriptInterface public void cut(int id) { NativeAudio.cut(id); }
         @JavascriptInterface public void alloff() { NativeAudio.allOff(); }

@@ -90,9 +90,11 @@ JNIEXPORT jboolean JNICALL FN(setOutput)(JNIEnv*, jclass, jint m) {
     if (n == gOutMode && gPlayer.stream) return JNI_TRUE;
     gOutMode = n; return gPlayer.open() ? JNI_TRUE : JNI_FALSE;
 }
-JNIEXPORT void JNICALL FN(noteOn)(JNIEnv* e, jclass, jint id, jfloatArray a, jfloat ratio) {
-    float s[sk::NSOUND] = {0}; jsize n = e->GetArrayLength(a); e->GetFloatArrayRegion(a, 0, std::min<jsize>(n, sk::NSOUND), s); gEngine.noteOn(id, s, ratio);
+JNIEXPORT void JNICALL FN(noteOn)(JNIEnv* e, jclass, jint id, jfloatArray a, jfloat ratio, jfloat gain, jfloat glide) {
+    float s[sk::NSOUND] = {0}; jsize n = e->GetArrayLength(a); e->GetFloatArrayRegion(a, 0, std::min<jsize>(n, sk::NSOUND), s); gEngine.noteOn(id, s, ratio, gain, glide);
 }
+JNIEXPORT void JNICALL FN(noteGain)(JNIEnv*, jclass, jint id, jfloat g) { gEngine.noteGain(id, g); }
+JNIEXPORT jboolean JNICALL FN(alive)(JNIEnv*, jclass, jint id) { return gEngine.alive(id) ? JNI_TRUE : JNI_FALSE; }
 JNIEXPORT void JNICALL FN(noteOff)(JNIEnv*, jclass, jint id) { gEngine.noteOff(id); }
 JNIEXPORT void JNICALL FN(cut)(JNIEnv*, jclass, jint id) { gEngine.cut(id); }
 JNIEXPORT void JNICALL FN(allOff)(JNIEnv*, jclass) { gEngine.allOff(); }

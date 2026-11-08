@@ -54,13 +54,18 @@ struct Voice {
     bool hold = true;
     float lev = 0, relCoef = 0.999f, rtau = 0.01f;
     long relLeft = 0;
+    float vg = 1, vgT = 1;      // key-position volume (smoothed)
+    float rat = 1, gOct = 0, gStep = 0;   // glide: octave offset from target pitch, moving to 0
+    float l0 = 0;
 };
 
 class Engine {
 public:
     void init(float sampleRate);
     // control (any thread)
-    void noteOn(int id, const float* snd /*NSOUND*/, float ratio);
+    void noteOn(int id, const float* snd /*NSOUND*/, float ratio, float gain = 1.f, float glide = 0.f);
+    void noteGain(int id, float g);
+    bool alive(int id);
     void noteOff(int id);
     void cut(int id);
     void allOff();
@@ -71,8 +76,8 @@ public:
     void render(float* out, int frames);          // interleaved stereo
     ~Engine();
 private:
-    struct Ev { int type, id; float ratio; float snd[NSOUND]; };
-    static const int RN = 512;
+    struct Ev { int type, id; float ratio, gain, gl; float snd[NSOUND]; };
+    static const int RN = 2048;
     Ev ring[RN]; std::atomic<uint32_t> rh{0}, rt{0}; std::mutex pm;
     void push(const Ev& e);
     void apply(const Ev& e);
