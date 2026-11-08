@@ -108,6 +108,9 @@ public class MainActivity extends Activity {
                         sb.append(ev.getPointerId(i)).append(',').append((int) (ev.getX(i) - loc[0])).append(',').append((int) (ev.getY(i) - loc[1]));
                     }
                 }
+                if (a == MotionEvent.ACTION_CANCEL) pt.postMessage(new WebMessage("C"));
+                if ((a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_POINTER_DOWN)
+                        && ev.getY(ev.getActionIndex()) > web.getHeight() - 24 * getResources().getDisplayMetrics().density) pt.postMessage(new WebMessage("E"));
                 String s = sb.toString();
                 if (!s.equals(lastTouch)) { lastTouch = s; pt.postMessage(new WebMessage(s)); }
             }
@@ -131,6 +134,8 @@ public class MainActivity extends Activity {
         w.setNavigationBarColor(Color.TRANSPARENT);
 
         web = new WebView(this);
+        if (Build.VERSION.SDK_INT >= 29) web.addOnLayoutChangeListener((v, l, t, r, bt, ol, ot, or2, ob) ->
+                v.setSystemGestureExclusionRects(java.util.Collections.singletonList(new android.graphics.Rect(0, 0, v.getWidth(), v.getHeight()))));
         web.setBackgroundColor(Color.parseColor("#1d110c"));
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setVerticalScrollBarEnabled(false);

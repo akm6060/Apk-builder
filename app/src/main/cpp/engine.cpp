@@ -146,7 +146,7 @@ void Engine::gRetarget(Voice& q, float ratio, float gain) {
     q.gTgt = tgt; q.vgT = gain;
     if (st < 1e-4f) { q.gCur = tgt; q.gStep = 0; return; }
     float f = st <= 2.01f ? 1.f / 3 : st <= 4.01f ? 0.5f : st <= 6.01f ? 2.f / 3 : 1.f;   // near notes glide faster
-    float T = std::max(0.005f, gT * f);
+    float T = std::max(0.0005f, gT * f);
     q.gStep = fabsf(d) / (T * sr);
 }
 bool Engine::gRemove(int id) { for (int i = 0; i < gn; i++) if (gs[i].id == id) { for (int k = i; k + 1 < gn; k++) gs[k] = gs[k + 1]; gn--; return true; } return false; }
