@@ -1,7 +1,10 @@
 package com.synthkeyboard.app;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Color;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -16,10 +19,13 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 
+/** Synth Keyboard: the web screen in a full-screen WebView; all sound comes from the native Oboe engine. */
 public class MainActivity extends Activity {
     private WebView web;
     private ValueCallback<Uri[]> chooser;
+    private long lastBack;
 
     private static float[] parse(String csv) {
         String[] p = csv.split(",");
@@ -28,8 +34,9 @@ public class MainActivity extends Activity {
         return f;
     }
 
-    /** Bridge used by the web page: all sound is made by the native low-latency engine. */
+    /** Bridge used by the web page. */
     private final class Bridge {
+        @JavascriptInterface public boolean available() { return NativeAudio.loaded; }
         @JavascriptInterface public void on(int id, String csv, double ratio) { NativeAudio.noteOn(id, parse(csv), (float) ratio); }
         @JavascriptInterface public void off(int id) { NativeAudio.noteOff(id); }
         @JavascriptInterface public void cut(int id) { NativeAudio.cut(id); }
@@ -37,30 +44,58 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void g(String csv) { NativeAudio.setGlobal(parse(csv)); }
         @JavascriptInterface public void drone(boolean on, double base) { NativeAudio.setDrone(on, (float) base); }
         @JavascriptInterface public void rev(double decay, double damp) { NativeAudio.setReverb((float) decay, (float) damp); }
+        @JavascriptInterface public void setOutput(int mode) { NativeAudio.setOutput(mode); }
+        @JavascriptInterface public String info() { return NativeAudio.loaded ? NativeAudio.info() : "Native audio not available"; }
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         Window w = getWindow();
-        w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        WindowManager.LayoutParams lp = w.getAttributes();
-        if (Build.VERSION.SDK_INT >= 30) lp.layoutInDisplayCutoutMode = 3;
-        else lp.layoutInDisplayCutoutMode = 1;
-        w.setAttributes(lp);
-        if (Build.VERSION.SDK_INT >= 30) w.setDecorFitsSystemWindows(false);
+        w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        if (Build.VERSION.SDK_INT >= 28) {
+            WindowManager.LayoutParams lp = w.getAttributes();
+            lp.layoutInDisplayCutoutMode = Build.VERSION.SDK_INT >= 30
+                    ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            w.setAttributes(lp);
+        }
+        w.setStatusBarColor(Color.TRANSPARENT);
+        w.setNavigationBarColor(Color.TRANSPARENT);
 
         web = new WebView(this);
-        web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        web.setBackgroundColor(Color.parseColor("#1d110c"));
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        web.setLongClickable(false);
+        web.setVerticalScrollBarEnabled(false);
+        web.setHorizontalScrollBarEnabled(false);
         web.setHapticFeedbackEnabled(false);
-        web.setBackgroundColor(0xFF160D08);
-        setContentView(web);
+        web.setLongClickable(false);
+        web.setOnLongClickListener(v -> true);
+
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setBuiltInZoomControls(false);
+        s.setDatabaseEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setTextZoom(100);
         s.setSupportZoom(false);
+        s.setBuiltInZoomControls(false);
+        s.setDisplayZoomControls(false);
+
+        NativeAudio.start();
+        web.addJavascriptInterface(new Bridge(), "NativeSynth");
+        web.addJavascriptInterface(new Object() {
+            @JavascriptInterface public void share(final String text) {
+                runOnUiThread(() -> {
+                    Intent i = new Intent(Intent.ACTION_SEND);
+                    i.setType("text/plain");
+                    i.putExtra(Intent.EXTRA_TEXT, text);
+                    startActivity(Intent.createChooser(i, "Export session"));
+                });
+            }
+            @JavascriptInterface public void exit() { runOnUiThread(() -> finishAndRemoveTask()); }
+        }, "Android");
+
         web.setWebViewClient(new WebViewClient());
         web.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
@@ -71,53 +106,67 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        web.addJavascriptInterface(new Bridge(), "NativeSynth");
-        web.addJavascriptInterface(new Object() {
-            @JavascriptInterface public void share(final String text) {
-                runOnUiThread(new Runnable() { public void run() {
-                    Intent i = new Intent(Intent.ACTION_SEND);
-                    i.setType("text/plain");
-                    i.putExtra(Intent.EXTRA_TEXT, text);
-                    startActivity(Intent.createChooser(i, "Export session"));
-                }});
-            }
-            @JavascriptInterface public void exit() {
-                runOnUiThread(new Runnable() { public void run() { finishAndRemoveTask(); }});
-            }
-        }, "Android");
-        web.loadUrl("file:///android_asset/index.html");
+
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
+        try { if (Build.VERSION.SDK_INT >= 24 && ((android.os.PowerManager) getSystemService(POWER_SERVICE)).isSustainedPerformanceModeSupported()) w.setSustainedPerformanceMode(true); } catch (Exception ignored) {}
+
+        setContentView(web);
+        goFullScreen();
+        if (b == null) web.loadUrl("file:///android_asset/index.html"); else web.restoreState(b);
     }
 
-    private void hideBars() {
+    @SuppressWarnings("deprecation")
+    private void goFullScreen() {
+        Window w = getWindow();
         if (Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController c = getWindow().getInsetsController();
+            w.setDecorFitsSystemWindows(false);
+            WindowInsetsController c = w.getInsetsController();
             if (c != null) {
-                c.hide(WindowInsets.Type.systemBars());
+                c.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
                 c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             }
         } else {
-            getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+            w.getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         }
     }
 
+    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) goFullScreen(); }
+
     @Override protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
         if (req == 1 && chooser != null) {
             chooser.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
             chooser = null;
         }
     }
 
-    @Override protected void onResume() { super.onResume(); NativeAudio.start(); web.onResume(); hideBars(); }
     @Override protected void onPause() {
-        NativeAudio.allOff();
-        web.evaluateJavascript("try{releaseAll()}catch(e){}", null);
-        web.onPause();
-        NativeAudio.stop();
         super.onPause();
+        if (web != null) { web.evaluateJavascript("try{offAll()}catch(e){}", null); web.onPause(); }
+        if (NativeAudio.loaded) NativeAudio.pause();
     }
-    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) hideBars(); }
-    @Override protected void onDestroy() { web.destroy(); super.onDestroy(); }
+    @Override protected void onResume() {
+        super.onResume();
+        if (NativeAudio.loaded) NativeAudio.start();
+        if (web != null) web.onResume();
+        goFullScreen();
+    }
+    @Override protected void onSaveInstanceState(Bundle o) { super.onSaveInstanceState(o); if (web != null) web.saveState(o); }
+
+    @SuppressWarnings("deprecation")
+    @Override public void onBackPressed() {
+        long now = System.currentTimeMillis();
+        if (now - lastBack < 2000) { super.onBackPressed(); return; }
+        lastBack = now;
+        Toast.makeText(this, "Press back again to exit", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override protected void onDestroy() {
+        if (web != null) { web.loadUrl("about:blank"); web.destroy(); web = null; }
+        if (NativeAudio.loaded) NativeAudio.stop();
+        super.onDestroy();
+    }
 }
