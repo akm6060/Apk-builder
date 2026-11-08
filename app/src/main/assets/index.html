@@ -55,7 +55,7 @@ const Z=Object.assign({op:0,pa:11,kw:48,dz:0,bw:60,bh:62,blk:false,two:false,kv:
 const M=Object.assign({cut:100,res:0,lr:5,vib:0,trm:0,wob:0,ch:0,tr:0,at:440},ld('kbM',{}));
 const T=Object.assign({o:[1,1,1,1],a:1,eq:1,fx:1,sn:1},ld('kbTg',{}));
 const sZ=()=>sv('kbZ',Z),sM=()=>sv('kbM',M),sT=()=>sv('kbTg',T);
-if(!Array.isArray(Z.eq)||Z.eq.length!==7)Z.eq=[0,0,0,0,0,0,0];Z.et=Math.min(500,Z.et);Z.rd=Math.min(3,Z.rd);if(!Z.v2){Z.dz=0;Z.v2=1;sZ()}
+if(!Array.isArray(Z.eq)||Z.eq.length!==7)Z.eq=[0,0,0,0,0,0,0];Z.et=Math.min(500,Z.et);Z.rd=Math.min(3,Z.rd);Z.dz=0;Z.gt=Math.min(1,+Z.gt||0);if(!Z.v3){Z.gt=Math.min(Z.gt,.3);Z.v3=1;sZ()}
 const snd=()=>({o:[0,1,2,3].map(k=>({w:0,f:k<3?262:64,v:k?0:100,t:0,c:0})),e:{a:.01,d:.5,s:5,r:.8},m:0});
 const SN=[snd(),snd()];let tg=0,poly=true,hold=false,two=false,AC,MS,G={};
 const syncs=[],refresh=()=>syncs.forEach(f=>f()),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -168,7 +168,7 @@ function recon(list,fresh){
   if(Tt.get(id)===m.key){   /* key believed to be playing: follow the finger's height on the key, and verify the engine really sounds it */
    const NSx=window.NativeSynth;
    if(NSx){try{if(Z.kv){const g=kgain(m.key,t.clientY);if(Math.abs(g-m.g)>.01){m.g=g;NSx.gain(m.key,g)}}
-    const v=V[m.key];if(v&&!glideOn()&&holdSnd(m.key)&&performance.now()-v.t0>150&&!NSx.alive(m.key)){DG.heal++;PY=m.g;start(m.key,1)}}catch(e){logErr(e)}}
+    const v=V[m.key];if(v&&holdSnd(m.key)&&performance.now()-v.t0>150&&!NSx.alive(m.key)){DG.heal++;PY=m.g;start(m.key,1)}}catch(e){logErr(e)}}
    continue}
   const isFresh=fresh&&fresh.has(id);
   let owner=false;for(const[i,k]of Tt)if(k===m.key&&i!==id)owner=true;
@@ -279,7 +279,7 @@ const setp=panel('setp','Settings');
 setp.append(mk('h3',0,'Keys'),
  bigRow('Keyboard position',()=>[0,maxPos()],()=>POS,v=>{POS=clamp(v,0,maxPos());layout()},()=>Z.kw,' px'),
  bigRow('Key width',()=>[24,90],()=>Z.kw,v=>{const n=clamp(Math.round(v),24,90);POS=POS*n/Z.kw;Z.kw=n;sZ();layout()},()=>2,' px'),
- sl('Black key width (% of white)',10,120,1,()=>Z.bw,v=>{Z.bw=v;sZ();layout()},' %'),sl('Black key height',30,100,1,()=>Z.bh,v=>{Z.bh=v;sZ();layout()},' %'),sl('Key edge dead zone (0 = every touch plays)',0,12,1,()=>Z.dz,v=>{Z.dz=v;sZ()},' px'));
+ sl('Black key width (% of white)',10,120,1,()=>Z.bw,v=>{Z.bw=v;sZ();layout()},' %'),sl('Black key height',30,100,1,()=>Z.bh,v=>{Z.bh=v;sZ();layout()},' %'));
 const tw=(x,k,f)=>{const b=mk('button');const sh=()=>{b.textContent=x(Z[k]);b.classList.toggle('act',!!Z[k]&&typeof Z[k]==='boolean')};b.onclick=()=>{f();sZ();refresh()};syncs.push(sh);sh();const r=mk('div','row');r.append(b);return r};
 setp.append(tw(v=>'Block white keys in black-key area: '+(v?'On':'Off'),'blk',()=>Z.blk=!Z.blk),
  tw(v=>'Keyboards: '+(v?'Two':'One'),'two',()=>setTwo(!Z.two)),
@@ -289,8 +289,8 @@ setp.append(tw(v=>'Block white keys in black-key area: '+(v?'On':'Off'),'blk',()
  mk('small',0,'Top of a white key starts where the black keys end. Slide your finger up or down inside a key to change the volume.'),
  mk('h3',0,'Glide (violin style)'),
  tw(v=>'Glide: '+(v?'On':'Off'),'gon',()=>{Z.gon=!Z.gon;glSh()}),
- sl('Glide time (0 = off)',0,5,.05,()=>Z.gt,v=>{Z.gt=v;sZ()},' s'),
- mk('small',0,'The sounding note slides to the next key you touch. Long-press the ⚙ button to switch glide on or off.'),
+ sl('Glide time (0 = off)',0,1,.01,()=>Z.gt,v=>{Z.gt=v;sZ()},' s'),
+ mk('small',0,'Hold a key and touch another: the pitch slides to it; lift it and the pitch slides back. Neighbouring keys glide faster (1/3, 1/2, 2/3 of this time). Long-press the ⚙ button to switch glide on or off.'),
  mk('h3',0,'Pitch'),sl('Transpose',-12,12,1,()=>M.tr,v=>{M.tr=v;sM()},' st'),sl('Tuning A4',415,466,1,()=>M.at,v=>{M.at=v;sM()},' Hz'),
  mk('h3',0,'Touch check'),(()=>{const t=mk('small'),er=mk('small'),ai=mk('small'),r=mk('div','row'),b=mk('button',0,'Reset counters');const u=()=>{try{ai.textContent=window.NativeSynth&&NativeSynth.info?NativeSynth.info():''}catch(e){}t.textContent='Touches '+DG.down+' · played '+DG.played+' · ignored '+DG.ignored+' · lifted '+DG.up+' · self-healed '+DG.heal+' · down now '+Tt.size+(DG.why?' · last ignored: '+DG.why:'');er.textContent=ERR.length?'Errors: '+ERR.join(' | '):'No errors logged'};b.onclick=()=>{DG.down=DG.played=DG.ignored=DG.up=DG.heal=0;DG.why='';u()};setInterval(()=>{if(!$('#ov').classList.contains('open'))return;u()},500);u();r.append(t);r.append(er);r.append(ai);r.append(b);return r})(),mk('h3',0,'Audio'),sl('Preamp',-25,25,1,()=>Z.pa,v=>{Z.pa=v;sZ();fx()},' dB'),(()=>{const r=mk('div','row');if(!(window.NativeSynth&&NativeSynth.setOutput))return r;const L=['Fast (normal speaker sound)','Fast exclusive (lowest delay, raw speaker)','Rich (more delay)'],b=mk('button'),sh=()=>{b.textContent='Audio path: '+L[Z.op||0]};b.onclick=()=>{Z.op=((Z.op||0)+1)%3;sZ();try{NativeSynth.setOutput(Z.op)}catch(e){}sh()};sh();r.append(b);return r})(),(()=>{const r=mk('div','row'),b=mk('button',0,'Audio: '+(Z.lat==='interactive'?'Low latency':'Safe buffer')),s=mk('small',0,'Reloads the app');b.onclick=()=>{Z.lat=Z.lat==='interactive'?'balanced':'interactive';sZ();location.reload()};r.append(b,s);return r})());
 function setTwo(v){Z.two=two=!!v;$('#kw1').hidden=!v;$('#tg').hidden=!v;if(!v&&tg){tg=0;tb.forEach((x,j)=>x.classList.toggle('act',!j))}if(v&&!window._k2){window._k2=1;const s=SN[1],p=P[1];p[2].forEach((x,i)=>Object.assign(s.o[i],{w:x[0],f:x[1],v:x[2],t:x[3]||0,c:x[4]||0}));[s.e.a,s.e.d,s.e.s,s.e.r]=p[3];s.m=p[4]||0}layout();refresh()}

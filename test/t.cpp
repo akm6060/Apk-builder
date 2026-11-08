@@ -66,17 +66,20 @@ int main(){
       e.noteGain(60,0.10f); run(40); auto b=run(30); float m2=0; for(float x:b) m2=std::max(m2,fabsf(x));
       printf("gain 0.05 peak %.4f -> after change to 0.10 peak %.4f (expect ~2x)\n",m1,m2); if(!(m2>m1*1.8f&&m2<m1*2.2f)) fails++;
       e.allOff(); run(200); }
-    // 9. glide: A3 held, then E4 (ratio 1.4983) with 1 s glide; track pitch by zero crossings, check no jump and arrival
-    { float s[NSOUND]; snd(s,0,.01f,.3f,5,.5f,0,220,100); e.noteOn(57,s,1.f,1.f,1.0f); run(60);
-      float r2=powf(2.f,7.f/12.f); e.noteOn(64,s,r2,1.f,1.0f);
-      std::vector<float> all; for(int i=0;i<250;i++){ e.render(buf.data(),192); for(int j=0;j<192;j++) all.push_back(buf[j*2]); }   // 1 s
-      auto freqAt=[&](double t0,double t1){ int zc=0; size_t a0=(size_t)(t0*48000),a1=(size_t)(t1*48000); for(size_t i=a0+1;i<a1;i++) if(all[i-1]<0&&all[i]>=0) zc++; return zc/(t1-t0); };
-      double fa=freqAt(0.02,0.12),fm=freqAt(0.45,0.55),fe=freqAt(0.9,1.0); run(80); std::vector<float> after; for(int i=0;i<40;i++){ e.render(buf.data(),192); for(int j=0;j<192;j++) after.push_back(buf[j*2]); }
-      int zc=0; for(size_t i=1;i<after.size();i++) if(after[i-1]<0&&after[i]>=0) zc++; double ff=zc/(after.size()/48000.0);
-      float mxs=0; for(size_t i=1;i<all.size();i++) mxs=std::max(mxs,fabsf(all[i]-all[i-1]));
-      printf("glide: start %.1f Hz, middle %.1f Hz, end of 1s %.1f Hz, after %.1f Hz (target %.1f), max sample step %.3f\n",fa,fm,fe,ff,220*r2,mxs);
-      if(!(fa>220&&fa<250&&fm>235&&fm<300&&ff>325&&ff<335&&mxs<0.12f)) { fails++; puts("  GLIDE?"); }
-      int act=0; for(int k=0;k<2;k++) act+=e.alive(57)?1:0; printf("old key voice taken over (alive57=%d, alive64=%d)\n",e.alive(57),e.alive(64)); if(e.alive(57)||!e.alive(64)) fails++;
+    // 9. glide stack: hold A, touch B (pitch slides), release B (pitch returns to A, A still sounding), repeat many times
+    { float s[NSOUND]; snd(s,0,.01f,.3f,5,.5f,0,220,100); float r2=powf(2.f,7.f/12.f);
+      auto freq=[&](double secs){ std::vector<float> a; int n=(int)(secs*250); for(int i=0;i<n;i++){ e.render(buf.data(),192); for(int j=0;j<192;j++) a.push_back(buf[j*2]); }
+        int zc=0; for(size_t i=1;i<a.size();i++) if(a[i-1]<0&&a[i]>=0) zc++; return zc/(a.size()/48000.0); };
+      e.noteOn(57,s,1.f,1.f,1.0f); run(60);
+      e.noteOn(64,s,r2,1.f,1.0f); double mid=freq(0.5); /* halfway-ish of a 1s glide over 7 semitones (full time) */ run(250); double hi=freq(0.2);
+      printf("glide up: mid %.1f Hz, arrived %.1f Hz (target %.1f); alive A=%d B=%d\n",mid,hi,220*r2,e.alive(57),e.alive(64));
+      if(!(mid>235&&mid<320&&hi>325&&hi<335&&e.alive(57)&&e.alive(64))) fails++;
+      e.noteOff(64); run(300); double back=freq(0.2); printf("after releasing B: %.1f Hz (expect 220), A alive=%d\n",back,e.alive(57)); if(!(back>215&&back<225&&e.alive(57))) fails++;
+      for(int r=0;r<50;r++){ e.noteOn(60+(r%9),s,powf(2.f,(3+(r%9))/12.f),1.f,0.3f); run(8+(r%5)*5); e.noteOff(60+(r%9)); run(10+(r%7)*4); if(!e.alive(57)){ printf("  A died at repeat %d\n",r); fails++; break; } }
+      run(300); double back2=freq(0.2); printf("after 50 touch/release cycles: %.1f Hz, A alive=%d\n",back2,e.alive(57)); if(!(back2>215&&back2<225&&e.alive(57))) fails++;
+      // adjacent note glide time = 1/3 of set time: 57 -> 59 (2 st) with T=0.6 s => 0.2 s
+      e.noteOn(59,s,powf(2.f,2/12.f),1.f,0.6f); run(62); double f1=freq(0.2); printf("adjacent (2 st) with T=0.6: %.1f Hz at 0.25-0.45 s (target %.1f)\n",f1,220*powf(2.f,2/12.f)); if(fabs(f1-246.9)>4) fails++;
+      e.noteOff(59); e.noteOff(57); run(300); printf("all released: alive A=%d B=%d\n",e.alive(57),e.alive(59)); if(e.alive(57)||e.alive(59)) fails++;
       e.allOff(); run(300); }
     puts(fails?"FAILED":"ENGINE TESTS PASSED"); return fails;
 }

@@ -55,7 +55,8 @@ struct Voice {
     float lev = 0, relCoef = 0.999f, rtau = 0.01f;
     long relLeft = 0;
     float vg = 1, vgT = 1;      // key-position volume (smoothed)
-    float rat = 1, gOct = 0, gStep = 0;   // glide: octave offset from target pitch, moving to 0
+    float rat = 1, gCur = 0, gTgt = 0, gStep = 0;   // glide: current/target octave offset from the note's base pitch
+    bool gv = false;           // monophonic glide voice (owns a stack of held keys)
     float l0 = 0;
 };
 
@@ -113,7 +114,11 @@ private:
     std::thread wk; std::mutex wm; std::condition_variable wc; bool wreq = false, wquit = false; float wdec = 2, wdmp = 40;
     void worker();
     void ctlUpdate(float lfo);
-    void startVoice(const Ev& e);
+    Voice* startVoice(const Ev& e);
+    struct GS { int id; float ratio, gain; } gs[24]; int gn = 0, gvi = -1; float gT = 0;
+    Voice* gvoice();
+    void gRetarget(Voice& q, float ratio, float gain);
+    bool gRemove(int id);
 };
 
 } // namespace sk
