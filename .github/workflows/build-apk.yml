@@ -16,14 +16,18 @@ jobs:
           SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKM" --licenses > /dev/null || true
           "$SDKM" "ndk;27.2.12479018" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0"
-      - name: Install Gradle 8.9 (with retries)
+      - name: Install Gradle 8.9 (with retries and mirrors)
         shell: bash
         run: |
-          for i in 1 2 3 4 5 6; do
-            curl -fsSL -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip && break
-            echo "download failed, retry $i"; sleep $((i*10))
+          ok=0
+          for i in 1 2 3 4; do
+            for u in https://services.gradle.org/distributions/gradle-8.9-bin.zip https://downloads.gradle.org/distributions/gradle-8.9-bin.zip https://github.com/gradle/gradle-distributions/releases/download/v8.9.0/gradle-8.9-bin.zip; do
+              if curl -fsSL --retry 2 -o /tmp/gradle.zip "$u" && unzip -tq /tmp/gradle.zip >/dev/null 2>&1; then ok=1; break 2; fi
+              echo "failed: $u"
+            done
+            sleep $((i*15))
           done
-          sudo unzip -q /tmp/gradle.zip -d /opt && echo "/opt/gradle-8.9/bin" >> "$GITHUB_PATH"
+          if [ $ok = 1 ]; then sudo unzip -q /tmp/gradle.zip -d /opt && echo "/opt/gradle-8.9/bin" >> "$GITHUB_PATH"; else echo "using preinstalled gradle"; gradle --version | head -5; fi
       - name: Build debug APK
         shell: bash
         run: |
