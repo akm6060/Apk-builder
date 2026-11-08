@@ -88,36 +88,6 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String info() { return NativeAudio.loaded ? NativeAudio.info() : "Native audio not available"; }
     }
 
-    private String lastTouch = "";
-    private final int[] loc = new int[2];
-
-    /** Every finger position straight from Android (before the WebView sees it), sent to the page as the full list. */
-    @Override public boolean dispatchTouchEvent(MotionEvent ev) {
-        try {
-            WebMessagePort pt = port;
-            if (pt != null && web != null) {
-                int a = ev.getActionMasked(), skip = a == MotionEvent.ACTION_POINTER_UP ? ev.getActionIndex() : -1;
-                StringBuilder sb = new StringBuilder("T|");
-                if (a != MotionEvent.ACTION_UP && a != MotionEvent.ACTION_CANCEL) {
-                    web.getLocationInWindow(loc);
-                    boolean first = true;
-                    for (int i = 0; i < ev.getPointerCount(); i++) {
-                        if (i == skip) continue;
-                        if (!first) sb.append(';');
-                        first = false;
-                        sb.append(ev.getPointerId(i)).append(',').append((int) (ev.getX(i) - loc[0])).append(',').append((int) (ev.getY(i) - loc[1]));
-                    }
-                }
-                if (a == MotionEvent.ACTION_CANCEL) pt.postMessage(new WebMessage("C"));
-                if ((a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_POINTER_DOWN)
-                        && ev.getY(ev.getActionIndex()) > web.getHeight() - 24 * getResources().getDisplayMetrics().density) pt.postMessage(new WebMessage("E"));
-                String s = sb.toString();
-                if (!s.equals(lastTouch)) { lastTouch = s; pt.postMessage(new WebMessage(s)); }
-            }
-        } catch (Throwable t) { }
-        return super.dispatchTouchEvent(ev);
-    }
-
     @SuppressLint("SetJavaScriptEnabled")
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);

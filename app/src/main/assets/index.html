@@ -141,61 +141,71 @@ const okHit=(el,x,y)=>{const r=el.getBoundingClientRect();
  if(Z.blk&&el.classList.contains('w')&&y-r.top<r.height*Z.bh/100){for(const b of el.parentNode.querySelectorAll('.b')){const q=b.getBoundingClientRect();if(x>q.left-6&&x<q.right+6)return false}}
  return Z.dz<=0||Math.min(x-r.left,r.right-x)>=Math.min(Z.dz,r.width/4)};
 const keyOf=t=>{const el=t&&t.closest?t.closest('[data-id]'):null;return el?{el,id:+el.dataset.id}:null};
-/* ---------- key input: level-triggered and self-healing (same design as the Harmonium app) ----------
-   Every touch event carries the full list of fingers on the screen. Instead of reacting to single start/end events
-   (one lost or late event would leave a key dead), the keys are re-matched to that full list on every touch event and
-   again 6 times a second while fingers are down. A finger that is held on a key but silent starts sounding by itself,
-   and a key whose finger has gone is always released. A finger stays bound to the key it first touched (no sliding). */
+/* ---------- key input: the Harmonium app's touch logic ----------
+   Every touch event carries the full list of fingers on the screen. The keys are re-matched to that list on every touch
+   event and again 6 times a second: a finger held on a key that is silent starts it again, a finger that has gone releases
+   its key, and a finger that SLIDES onto a neighbouring key plays that key (the previous key stops). A finger that lands on
+   a hairline gap between keys plays the nearest key. */
 const kbs=$('#kbs'),DG={down:0,played:0,ignored:0,up:0,heal:0,why:''};
 let ERR=[];try{ERR=JSON.parse(localStorage.getItem('kbErr')||'[]')||[]}catch(e){ERR=[]}
 function logErr(e){try{ERR.push(new Date().toLocaleTimeString()+' '+String((e&&e.message)||e).slice(0,100));while(ERR.length>5)ERR.shift();localStorage.setItem('kbErr',JSON.stringify(ERR))}catch(x){}}
 addEventListener('error',e=>logErr(e.error||e.message));addEventListener('unhandledrejection',e=>logErr(e.reason));
-const TE='ontouchstart' in window,tk=new Map(),tp=new Set();let snap=[],snapT=0,lastTE=0,lastPU=0;
-const hitAt=(x,y,tgt)=>{let h=null;try{h=keyOf(document.elementFromPoint(x,y))}catch(_){}if(!h&&tgt)h=keyOf(tgt);if(!h){DG.why='touch was not on a key';return null}if(!okHit(h.el,x,y)){DG.why='blocked by the black-key option';return null}return h};
-const pendRel=new Map();let PY=1,RELD=35;
+const TE='ontouchstart' in window,tk=new Map(),tp=new Set();let snap=[],snapT=0,lastTE=0,lastPU=0,tOrd=0;
+let PY=1;
 const kgain=(id,y)=>{if(!Z.kv)return 1;const el=keyEls[id];if(!el)return 1;const r=el.getBoundingClientRect(),top=r.top+(el.classList.contains('w')?r.height*Z.bh/100:0);
  return (Z.ku+(Z.kl-Z.ku)*clamp((y-top)/Math.max(1,r.bottom-top),0,1))/100};
 const holdSnd=id=>{const sd=SN[two?id/100|0:0];return !T.a||!sd||!sd.e||sd.e.s>=5};
 const glideOn=()=>Z.gon&&Z.gt>0;
-function takeOver(key,except){for(const[i,k]of[...Tt])if(k===key&&i!==except)Tt.delete(i)}
+const rowOf=id=>two?(id/100|0):0;
+/* the key under (x,y): the element there, else the nearest white key of the keyboard row at that height */
+function keyAtXY(x,y,first){
+ let el=null;try{el=document.elementFromPoint(x,y)}catch(_){}
+ let k=el&&el.closest?el.closest('[data-id]'):null;
+ if(!k){const wr=kbs.getBoundingClientRect();
+  if(x>=wr.left&&x<=wr.right)for(const row of KB){if(row.parentNode.hidden)continue;const r=row.getBoundingClientRect();
+   if(y>=r.top-1&&y<=r.bottom+1){let bd=1e9;row.querySelectorAll('.w').forEach(w=>{const q=w.getBoundingClientRect(),d=x<q.left?q.left-x:x>q.right?x-q.right:0;if(d<bd){bd=d;k=w}});break}}}
+ if(!k){if(first)DG.why='touch was not on a key';return null}
+ if(first&&Z.blk&&!okHit(k,x,y)){DG.why='blocked by the black-key option';return null}
+ return +k.dataset.id}
 function recon(list,fresh,timer){
- const now=new Set(),cand=[];
+ const now=new Set(),want=[],cand=[];
  for(const t of list){const id='t'+t.identifier;now.add(id);
-  if(!tk.has(id)||(fresh&&fresh.has(id))){const h=hitAt(t.clientX,t.clientY);tk.set(id,{key:h?h.id:null,g:1});DG.down++;if(h)DG.played++;else DG.ignored++}}
- for(const[id,key]of[...Tt])if(!now.has(id)&&id[0]==='t'){Tt.delete(id);DG.up++;if(pendRel.has(key))clearTimeout(pendRel.get(key));
-  /* a panel flicker (finger lost and found again within 35 ms on the same key) must not sound twice */
-  const fin=()=>{pendRel.delete(key);for(const k of Tt.values())if(k===key)return;try{stop(key,1)}catch(e){logErr(e)}};if(RELD>0)pendRel.set(key,setTimeout(fin,RELD));else fin()}
+  let m=tk.get(id);
+  if(!m||(fresh&&fresh.has(id))){const k0=keyAtXY(t.clientX,t.clientY,true);m={kb:k0!=null,ord:++tOrd,lk:k0,g:1};tk.set(id,m);DG.down++;if(k0!=null)DG.played++;else DG.ignored++}
+  if(!m.kb)continue;
+  let k=keyAtXY(t.clientX,t.clientY);
+  if(k==null)k=Tt.has(id)?Tt.get(id):m.lk;      /* slid off the keys: keep the current note */
+  if(k==null)continue;m.lk=k;want.push([id,k,m.ord,m,t])}
+ for(const[id,key]of[...Tt])if(!now.has(id)&&id[0]==='t'){Tt.delete(id);DG.up++;try{stop(key,1)}catch(e){logErr(e)}}
  for(const id of[...tk.keys()])if(!now.has(id))tk.delete(id);
- for(const t of list){const id='t'+t.identifier,m=tk.get(id);if(!m||m.key==null)continue;
-  if(Tt.get(id)===m.key){   /* key believed to be playing: follow the finger's height on the key, and verify the engine really sounds it */
-   const NSx=window.NQ;
-   if(NSx){try{if(Z.kv){const nw=performance.now();if(nw-(m.gt||0)>30){const g=kgain(m.key,t.clientY);if(Math.abs(g-m.g)>.01){m.g=g;m.gt=nw;NSx.gain(m.key,g)}}}
-    const v=V[m.key];if(timer&&v&&holdSnd(m.key)&&performance.now()-v.t0>150)cand.push(m)}catch(e){logErr(e)}}
+ /* mono (not glide): only the newest finger sounds; when it lifts the previous finger sounds again */
+ const mono=!poly&&!glideOn(),best={};
+ if(mono)for(const w of want){const r=rowOf(w[1]);if(!best[r]||w[2]>best[r][2])best[r]=w}
+ for(const[id,k,,m,t]of want){
+  if(mono&&best[rowOf(k)][0]!==id){if(Tt.has(id)){const o=Tt.get(id);Tt.delete(id);try{stop(o,1)}catch(e){logErr(e)}}continue}
+  const cur=Tt.get(id),isFresh=!!(fresh&&fresh.has(id));
+  if(cur===k){   /* already sounding: follow the finger's height on the key; (timer) verify the engine really sounds it */
+   const NQx=window.NQ;
+   if(NQx){try{if(Z.kv){const nw=performance.now();if(nw-(m.gt||0)>30){const g=kgain(k,t.clientY);if(Math.abs(g-m.g)>.01){m.g=g;m.gt=nw;NQx.gain(k,g)}}}
+    const v=V[k];if(timer&&v&&holdSnd(k)&&performance.now()-v.t0>150)cand.push(m)}catch(e){logErr(e)}}
    continue}
-  const isFresh=fresh&&fresh.has(id);
-  let owner=false;for(const[i,k]of Tt)if(k===m.key&&i!==id)owner=true;
-  if(owner&&!isFresh)continue;            /* another finger already sounds this key */
-  if(!isFresh)DG.heal++;
-  if(pendRel.has(m.key)){clearTimeout(pendRel.get(m.key));pendRel.delete(m.key);if(V[m.key]){takeOver(m.key,id);Tt.set(id,m.key);DG.merged=(DG.merged||0)+1;continue}}
-  takeOver(m.key,id);Tt.set(id,m.key);PY=m.g=kgain(m.key,t.clientY);try{start(m.key,1)}catch(e){logErr(e)}PY=1}
+  let owner=false;for(const[i,kk]of Tt)if(kk===k&&i!==id)owner=true;
+  if(owner&&!isFresh){Tt.set(id,k);if(cur!==undefined)try{stop(cur,1)}catch(e){logErr(e)}continue}   /* slid onto a key another finger holds */
+  if(!isFresh&&cur===undefined)DG.heal++;
+  takeOver(k,id);Tt.set(id,k);m.key=k;PY=m.g=kgain(k,t.clientY);
+  try{start(k,1)}catch(e){logErr(e)}PY=1;
+  if(cur!==undefined&&cur!==k)try{stop(cur,1)}catch(e){logErr(e)}      /* slid from another key: new key first (glide), then release the old one */
+ }
  if(cand.length&&window.NQ){try{window.NQ.dead(cand.map(m=>m.key).join(','))}catch(e){logErr(e)}}
 }
-/* finger positions read by Android itself (MainActivity.dispatchTouchEvent): the authoritative list when available */
-let JV=false,jN=0,domN=0,jPrev=new Set(),disN=0;
-function onJava(d){JV=true;const t0=jT=performance.now(),dpr=window.devicePixelRatio||1;
- const list=d.length>2?d.slice(2).split(';').map(s=>{const a=s.split(',');return{identifier:'j'+a[0],clientX:+a[1]/dpr,clientY:+a[2]/dpr}}):[];
- jN=list.length;const f=new Set(),cur=new Set();for(const t of list){cur.add(t.identifier);if(!jPrev.has(t.identifier))f.add('t'+t.identifier)}jPrev=cur;
- lastTE=t0;snap=list;snapT=t0;try{recon(list,f)}catch(e){logErr(e)}}
+function takeOver(key,except){for(const[i,k]of[...Tt])if(k===key&&i!==except)Tt.delete(i)}
 function onDead(csv){const d=csv?csv.split(',').map(Number):[];
  for(const[id,key]of[...Tt]){const m=tk.get(id);if(!d.includes(key)){if(m)m.dc=0;continue}
   if(m&&(m.dc=(m.dc||0)+1)<2)continue;
   if(V[key]&&performance.now()-V[key].t0>150){DG.heal++;if(m)m.dc=0;PY=m?m.g:1;try{start(key,1)}catch(e){logErr(e)}PY=1}}}
+function tEv(e,fresh){lastTE=performance.now();{const lag=lastTE-e.timeStamp;if(lag>80&&lag<5000){DG.late=(DG.late||0)+1;DG.lagMax=Math.max(DG.lagMax||0,Math.round(lag))}}
+ try{snap=[...e.touches].map(t=>({identifier:t.identifier,clientX:t.clientX,clientY:t.clientY}));snapT=lastTE;recon(snap,fresh)}catch(x){logErr(x)}}
 {let lt=performance.now();setInterval(()=>{const n=performance.now(),g=n-lt;lt=n;if(!document.hidden&&g>150){DG.stall=(DG.stall||0)+1;DG.stallMax=Math.max(DG.stallMax||0,Math.round(g-50))}},50)}
-let jT=0;
-function tEv(e,fresh){if(JV){domN=e.touches.length;
-  if(e.type==='touchstart'){const t=performance.now(),fl=[...e.touches].map(x=>({identifier:x.identifier,clientX:x.clientX,clientY:x.clientY})),fr=new Set([...e.changedTouches].map(x=>'t'+x.identifier));
-   setTimeout(()=>{if(JV&&jT<t){JV=false;DG.jvOff=1;snap=[];jPrev=new Set();try{recon(fl,fr)}catch(x){logErr(x)}}},220)}
-  return}lastTE=performance.now();{const lag=lastTE-e.timeStamp;if(lag>80&&lag<5000){DG.late=(DG.late||0)+1;DG.lagMax=Math.max(DG.lagMax||0,Math.round(lag))}}try{snap=[...e.touches].map(t=>({identifier:t.identifier,clientX:t.clientX,clientY:t.clientY}));snapT=lastTE;recon(snap,fresh)}catch(x){logErr(x)}}
 addEventListener('touchstart',e=>{const f=new Set();for(const t of e.changedTouches)f.add('t'+t.identifier);tEv(e,f)},{passive:true});
 addEventListener('touchmove',e=>tEv(e),{passive:true});
 ['touchend','touchcancel'].forEach(n=>addEventListener(n,e=>tEv(e),{passive:true}));
@@ -203,15 +213,19 @@ addEventListener('touchmove',e=>tEv(e),{passive:true});
 addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')tp.add(e.pointerId)},true);
 /* mouse (and touch on a device without touch events) */
 const ptr=e=>!TE||e.pointerType==='mouse';
-kbs.addEventListener('pointerdown',e=>{if(!ptr(e))return;const h=hitAt(e.clientX,e.clientY,e.target);if(!h)return;e.preventDefault();const id='p'+e.pointerId;
- if(Tt.has(id)){const o=Tt.get(id);Tt.delete(id);stop(o,1)}takeOver(h.id,id);Tt.set(id,h.id);DG.down++;DG.played++;PY=kgain(h.id,e.clientY);start(h.id,1);PY=1});
+kbs.addEventListener('pointerdown',e=>{if(!ptr(e))return;const k=keyAtXY(e.clientX,e.clientY,true);if(k==null)return;e.preventDefault();const id='p'+e.pointerId;
+ if(Tt.has(id)){const o=Tt.get(id);Tt.delete(id);stop(o,1)}takeOver(k,id);Tt.set(id,k);DG.down++;DG.played++;PY=kgain(k,e.clientY);start(k,1);PY=1});
+addEventListener('pointermove',e=>{if(!ptr(e))return;const id='p'+e.pointerId,cur=Tt.get(id);if(cur===undefined)return;
+ if(e.pointerType==='mouse'&&e.buttons===0){Tt.delete(id);stop(cur,1);return}
+ const k=keyAtXY(e.clientX,e.clientY);
+ if(k!=null&&k!==cur){Tt.delete(id);takeOver(k,id);Tt.set(id,k);PY=kgain(k,e.clientY);start(k,1);PY=1;stop(cur,1)}
+ else if(Z.kv&&window.NQ)window.NQ.gain(cur,kgain(cur,e.clientY))});
 ['pointerup','pointercancel'].forEach(n=>addEventListener(n,e=>{const id='p'+e.pointerId,k=Tt.get(id);if(k!==undefined){Tt.delete(id);DG.up++;stop(k,1)}if(e.pointerType!=='mouse'){tp.delete(e.pointerId);lastPU=performance.now()}},true));
 /* self-heal between events */
 setInterval(()=>{const n=performance.now();
- if(JV){if(domN!==jN){if(++disN===3)DG.dis=(DG.dis||0)+1}else disN=0}
- if(!JV&&TE&&snap.length&&!tp.size&&lastPU>lastTE&&n-lastPU>250){snap=[];try{recon([])}catch(e){}return}   /* all fingers up per pointer events, touchend never came */
- if(snap.length&&(JV||n-snapT<4000)&&!document.hidden)try{recon(snap,null,true)}catch(e){logErr(e)}},160);
-const offAll=()=>{pendRel.forEach(clearTimeout);pendRel.clear();snap=[];jPrev=new Set();tk.clear();releaseAll()};
+ if(TE&&snap.length&&!tp.size&&lastPU>lastTE&&n-lastPU>250){snap=[];try{recon([])}catch(e){}return}   /* all fingers up per pointer events, touchend never came */
+ if(snap.length&&n-snapT<4000&&!document.hidden)try{recon(snap,null,true)}catch(e){logErr(e)}},160);
+const offAll=()=>{snap=[];tk.clear();releaseAll()};
 addEventListener('pagehide',offAll);
 addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('resize',layout);
@@ -314,7 +328,7 @@ setp.append(tw(v=>'Block white keys in black-key area: '+(v?'On':'Off'),'blk',()
   const sh=()=>{i.value=toP(Z.gt);t.textContent='Glide time (log scale: 1 ms to 1 s): '+fm(Z.gt)};i.oninput=()=>{Z.gt=toS(+i.value);sZ();sh()};sh();syncs.push(sh);d.append(t,i);return d})(),
  mk('small',0,'Hold a key and touch another: the pitch slides to it; lift it and the pitch slides back. Neighbouring keys glide faster (1/3, 1/2, 2/3 of this time). Long-press the ⚙ button to switch glide on or off.'),
  mk('h3',0,'Pitch'),sl('Transpose',-12,12,1,()=>M.tr,v=>{M.tr=v;sM()},' st'),sl('Tuning A4',415,466,1,()=>M.at,v=>{M.at=v;sM()},' Hz'),
- mk('h3',0,'Touch check'),(()=>{const t=mk('small'),er=mk('small'),ai=mk('small'),r=mk('div','row'),b=mk('button',0,'Reset counters');const u=()=>{try{ai.textContent=window.NativeSynth&&NativeSynth.info?NativeSynth.info():''}catch(e){}t.textContent='Touches '+DG.down+' · played '+DG.played+' · ignored '+DG.ignored+' · lifted '+DG.up+' · self-healed '+DG.heal+' · slowest audio call '+(DG.bm||0)+' ms · late touches '+(DG.late||0)+' (worst '+(DG.lagMax||0)+' ms) · page stalls '+(DG.stall||0)+' (worst '+(DG.stallMax||0)+' ms) · Android finger list '+(JV?'on':DG.jvOff?'FAILED, using Chrome touches':'off')+' · Chrome/Android disagreements '+(DG.dis||0)+' · cancelled by Android '+(DG.cancel||0)+' · merged flickers '+(DG.merged||0)+' · touches in bottom edge strip '+(DG.edge||0)+' · down now '+Tt.size+(DG.why?' · last ignored: '+DG.why:'');er.textContent=ERR.length?'Errors: '+ERR.join(' | '):'No errors logged'};b.onclick=()=>{DG.down=DG.played=DG.ignored=DG.up=DG.merged=DG.cancel=DG.edge=DG.heal=DG.dis=DG.late=DG.lagMax=DG.stall=DG.stallMax=0;DG.bm=0;DG.why='';u()};setInterval(()=>{if(!$('#ov').classList.contains('open'))return;u()},500);u();r.append(t);r.append(er);r.append(ai);r.append(b);return r})(),mk('h3',0,'Audio'),sl('Preamp',-25,25,1,()=>Z.pa,v=>{Z.pa=v;sZ();fx()},' dB'),(()=>{const r=mk('div','row');if(!(window.NativeSynth&&NativeSynth.setOutput))return r;const L=['Fast (normal speaker sound)','Fast exclusive (lowest delay, raw speaker)','Rich (more delay)'],b=mk('button'),sh=()=>{b.textContent='Audio path: '+L[Z.op||0]};b.onclick=()=>{Z.op=((Z.op||0)+1)%3;sZ();try{NativeSynth.setOutput(Z.op)}catch(e){}sh()};sh();r.append(b);return r})(),(()=>{const r=mk('div','row'),b=mk('button',0,'Audio: '+(Z.lat==='interactive'?'Low latency':'Safe buffer')),s=mk('small',0,'Reloads the app');b.onclick=()=>{Z.lat=Z.lat==='interactive'?'balanced':'interactive';sZ();location.reload()};r.append(b,s);return r})());
+ mk('h3',0,'Touch check'),(()=>{const t=mk('small'),er=mk('small'),ai=mk('small'),r=mk('div','row'),b=mk('button',0,'Reset counters');const u=()=>{try{ai.textContent=window.NativeSynth&&NativeSynth.info?NativeSynth.info():''}catch(e){}t.textContent='Touches '+DG.down+' · played '+DG.played+' · ignored '+DG.ignored+' · lifted '+DG.up+' · self-healed '+DG.heal+' · slowest audio call '+(DG.bm||0)+' ms · late touches '+(DG.late||0)+' (worst '+(DG.lagMax||0)+' ms) · page stalls '+(DG.stall||0)+' (worst '+(DG.stallMax||0)+' ms) · self-healed '+DG.heal+' · down now '+Tt.size+(DG.why?' · last ignored: '+DG.why:'');er.textContent=ERR.length?'Errors: '+ERR.join(' | '):'No errors logged'};b.onclick=()=>{DG.down=DG.played=DG.ignored=DG.up=DG.merged=DG.cancel=DG.edge=DG.heal=DG.dis=DG.late=DG.lagMax=DG.stall=DG.stallMax=0;DG.bm=0;DG.why='';u()};setInterval(()=>{if(!$('#ov').classList.contains('open'))return;u()},500);u();r.append(t);r.append(er);r.append(ai);r.append(b);return r})(),mk('h3',0,'Audio'),sl('Preamp',-25,25,1,()=>Z.pa,v=>{Z.pa=v;sZ();fx()},' dB'),(()=>{const r=mk('div','row');if(!(window.NativeSynth&&NativeSynth.setOutput))return r;const L=['Fast (normal speaker sound)','Fast exclusive (lowest delay, raw speaker)','Rich (more delay)'],b=mk('button'),sh=()=>{b.textContent='Audio path: '+L[Z.op||0]};b.onclick=()=>{Z.op=((Z.op||0)+1)%3;sZ();try{NativeSynth.setOutput(Z.op)}catch(e){}sh()};sh();r.append(b);return r})(),(()=>{const r=mk('div','row'),b=mk('button',0,'Audio: '+(Z.lat==='interactive'?'Low latency':'Safe buffer')),s=mk('small',0,'Reloads the app');b.onclick=()=>{Z.lat=Z.lat==='interactive'?'balanced':'interactive';sZ();location.reload()};r.append(b,s);return r})());
 function setTwo(v){Z.two=two=!!v;$('#kw1').hidden=!v;$('#tg').hidden=!v;if(!v&&tg){tg=0;tb.forEach((x,j)=>x.classList.toggle('act',!j))}if(v&&!window._k2){window._k2=1;const s=SN[1],p=P[1];p[2].forEach((x,i)=>Object.assign(s.o[i],{w:x[0],f:x[1],v:x[2],t:x[3]||0,c:x[4]||0}));[s.e.a,s.e.d,s.e.s,s.e.r]=p[3];s.m=p[4]||0}layout();refresh()}
 /* ---------- toggles ---------- */
 [0,1,2,3].forEach(k=>tgl(B['o'+k],()=>T.o[k],v=>{T.o[k]=v?1:0;sT()},'synp',k));
@@ -357,7 +371,7 @@ function eqMag(j,f,dB){const sr=48000,A=Math.pow(10,dB/40),w=2*Math.PI*EF[j]/sr,
 const NS=window.NativeSynth;
 if(NS){
  const Q={port:null,pend:0};
- addEventListener('message',e=>{if(e.data==='skport'&&e.ports&&e.ports[0]){const p=e.ports[0];p.onmessage=ev=>{const d=String(ev.data);if(d[0]==='q'){Q.pend=0;onDead(d.slice(2))}else if(d[0]==='T')onJava(d);else if(d[0]==='C')DG.cancel=(DG.cancel||0)+1;else if(d[0]==='E')DG.edge=(DG.edge||0)+1};Q.port=p}});
+ addEventListener('message',e=>{if(e.data==='skport'&&e.ports&&e.ports[0]){const p=e.ports[0];p.onmessage=ev=>{const d=String(ev.data);if(d[0]==='q'){Q.pend=0;onDead(d.slice(2))}};Q.port=p}});
  const send=(m,f)=>{if(Q.port){try{Q.port.postMessage(m);return}catch(e){Q.port=null}}f()};
  window.NQ={hush:()=>send('h',()=>{if(NS.hush)NS.hush()}),gain:(id,g)=>send('g|'+id+'|'+g,()=>NS.gain(id,g)),
   dead:keys=>{if(Q.port){const n=performance.now();if(Q.pend&&n-Q.pend<600)return;Q.pend=n;send('q|'+keys,()=>{})}else onDead(String(NS.dead(keys)))}};
