@@ -19,6 +19,10 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebMessage;
+import android.webkit.WebMessagePort;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.widget.Toast;
 
 /** Synth Keyboard: the web screen in a full-screen WebView; all sound comes from the native Oboe engine. */
@@ -26,6 +30,32 @@ public class MainActivity extends Activity {
     private WebView web;
     private ValueCallback<Uri[]> chooser;
     private long lastBack;
+    private WebMessagePort port;
+    private HandlerThread ctl;
+    private Handler ctlH;
+
+    /** Audio commands from the page arrive here through an asynchronous message channel (never blocks the page). */
+    private void onMsg(String s) {
+        try {
+            String[] p = s.split("\\|", -1);
+            switch (p[0]) {
+                case "n": NativeAudio.noteOn(Integer.parseInt(p[1]), parse(p[2]), Float.parseFloat(p[3]), Float.parseFloat(p[4]), Float.parseFloat(p[5])); break;
+                case "f": NativeAudio.noteOff(Integer.parseInt(p[1])); break;
+                case "c": NativeAudio.cut(Integer.parseInt(p[1])); break;
+                case "a": NativeAudio.allOff(); break;
+                case "g": NativeAudio.noteGain(Integer.parseInt(p[1]), Float.parseFloat(p[2])); break;
+                case "G": NativeAudio.setGlobal(parse(p[1])); break;
+                case "d": NativeAudio.setDrone("1".equals(p[1]), Float.parseFloat(p[2])); break;
+                case "r": NativeAudio.setReverb(Float.parseFloat(p[1]), Float.parseFloat(p[2])); break;
+                case "q": {
+                    StringBuilder sb = new StringBuilder();
+                    for (String k : p[1].split(",")) { try { int id = Integer.parseInt(k.trim()); if (!NativeAudio.alive(id)) sb.append(sb.length() > 0 ? "," : "").append(id); } catch (Exception e) { } }
+                    WebMessagePort pt = port; if (pt != null) pt.postMessage(new WebMessage("q|" + sb));
+                    break;
+                }
+            }
+        } catch (Throwable t) { }
+    }
 
     private static float[] parse(String csv) {
         String[] p = csv.split(",");
@@ -103,7 +133,19 @@ public class MainActivity extends Activity {
             @JavascriptInterface public void exit() { runOnUiThread(() -> finishAndRemoveTask()); }
         }, "Android");
 
-        web.setWebViewClient(new WebViewClient());
+        ctl = new HandlerThread("synth-ctl"); ctl.start(); ctlH = new Handler(ctl.getLooper());
+        web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView v, String url) {
+                try {
+                    WebMessagePort[] pp = v.createWebMessageChannel();
+                    port = pp[0];
+                    port.setWebMessageCallback(new WebMessagePort.WebMessageCallback() {
+                        @Override public void onMessage(WebMessagePort pt, WebMessage m) { String d = m.getData(); if (d != null) onMsg(d); }
+                    }, ctlH);
+                    v.postWebMessage(new WebMessage("skport", new WebMessagePort[]{pp[1]}), Uri.parse("*"));
+                } catch (Throwable t) { port = null; }
+            }
+        });
         web.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (chooser != null) chooser.onReceiveValue(null);
