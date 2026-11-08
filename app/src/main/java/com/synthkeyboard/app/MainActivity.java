@@ -40,6 +40,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void on(int id, String csv, double ratio, double gain, double glide) { NativeAudio.noteOn(id, parse(csv), (float) ratio, (float) gain, (float) glide); }
         @JavascriptInterface public void gain(int id, double g) { NativeAudio.noteGain(id, (float) g); }
         @JavascriptInterface public boolean alive(int id) { return NativeAudio.alive(id); }
+        @JavascriptInterface public String dead(String csv) {
+            StringBuilder sb = new StringBuilder();
+            for (String s : csv.split(",")) { try { int id = Integer.parseInt(s.trim()); if (!NativeAudio.alive(id)) sb.append(sb.length() > 0 ? "," : "").append(id); } catch (Exception e) { } }
+            return sb.toString();
+        }
         @JavascriptInterface public void off(int id) { NativeAudio.noteOff(id); }
         @JavascriptInterface public void cut(int id) { NativeAudio.cut(id); }
         @JavascriptInterface public void alloff() { NativeAudio.allOff(); }
