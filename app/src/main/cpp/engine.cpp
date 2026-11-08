@@ -87,6 +87,7 @@ void Engine::push(const Ev& e) {
 }
 void Engine::noteOn(int id, const float* s, float ratio, float gain, float glide) { Ev e; e.type = 1; e.id = id; e.ratio = ratio; e.gain = gain < 0 ? 0 : gain > 1 ? 1 : gain; e.gl = glide; memcpy(e.snd, s, sizeof(float) * NSOUND); push(e); }
 void Engine::noteGain(int id, float g) { Ev e; memset(&e, 0, sizeof e); e.type = 5; e.id = id; e.gain = g < 0 ? 0 : g > 1 ? 1 : g; push(e); }
+void Engine::hush() { Ev e; memset(&e, 0, sizeof e); e.type = 6; push(e); }
 bool Engine::alive(int id) { if (gvoice()) for (int i = 0; i < gn; i++) if (gs[i].id == id) return true;
     for (auto& q : v) if (q.act && q.id == id && !q.fast && q.stage != 5 && q.stage != 4) return true; return false; }
 void Engine::noteOff(int id) { Ev e; memset(&e, 0, sizeof e); e.type = 2; e.id = id; push(e); }
@@ -173,6 +174,11 @@ void Engine::apply(const Ev& e) {
             else { q.fast = true; q.stage = 5; q.rtau = 0.008f; q.relCoef = expf(-1.f / (0.008f * sr)); q.relLeft = (long)(0.12f * sr); }
             return;
         }
+    }
+    if (e.type == 6) {
+        gn = 0; gvi = -1;
+        for (auto& q : v) if (q.act) { q.gv = false; if (!q.fast) { q.fast = true; q.stage = 5; q.rtau = 0.0015f; q.relCoef = expf(-1.f / (0.0015f * sr)); q.relLeft = (long)(0.1f * sr); } else { q.relCoef = std::min(q.relCoef, expf(-1.f / (0.0015f * sr))); } }
+        hstate = 1; return;
     }
     if (e.type == 4) { gn = 0; gvi = -1; for (auto& q : v) q.gv = false; }
     if (e.type == 5) { for (auto& q : v) if (q.act && q.id == e.id && !q.fast) q.vgT = e.gain; }
@@ -359,6 +365,14 @@ void Engine::render(float* out, int frames) {
             trmS += (trmT - trmS) * alS; x *= (1.f - trmS) + trmS * lf[i];
             for (auto& e : eq) x = e.run(x);
             echoS += (ecT - echoS) * alS; revS += (rvT - revS) * alS; chS += (chT - chS) * alS; preS += (prT - preS) * alS;
+            if (hstate) {   // flush: fade the wet returns out, clear every tail, fade back in
+                const float st = 1.f / (0.010f * sr);
+                if (hstate == 1) { hg -= st; if (hg <= 0.f) { hg = 0.f; hstate = 2;
+                    std::fill(dl.begin(), dl.end(), 0.f); std::fill(cd.begin(), cd.end(), 0.f); efl.z1 = efl.z2 = 0;
+                    std::fill(inHist.begin(), inHist.end(), 0.f); cfill = 0; memset(outB, 0, sizeof outB);
+                    std::fill(fdlRe.begin(), fdlRe.end(), 0.f); std::fill(fdlIm.begin(), fdlIm.end(), 0.f); } }
+                else { hg += st * 1.6f; if (hg >= 1.f) { hg = 1.f; hstate = 0; } }
+            }
             float L = x, R = x;
             // echo
             {
@@ -366,7 +380,7 @@ void Engine::render(float* out, int frames) {
                 int i0 = (int)rp; float fr = rp - i0; int i1 = i0 + 1; if (i1 >= (int)dl.size()) i1 = 0;
                 float w = dl[i0] + (dl[i1] - dl[i0]) * fr;
                 dl[dw] = echoS * x + efbS * efl.run(w); if (++dw >= (int)dl.size()) dw = 0;
-                L += w; R += w;
+                L += w * hg; R += w * hg;
             }
             // chorus
             if (chS > 1e-4f || chT > 0) {
@@ -376,13 +390,13 @@ void Engine::render(float* out, int frames) {
                 float tl = (0.014f + 0.003f * m) * sr, tr_ = (0.019f - 0.003f * m) * sr;
                 float r1 = (float)cw - tl; if (r1 < 0) r1 += (float)cd.size(); float r2 = (float)cw - tr_; if (r2 < 0) r2 += (float)cd.size();
                 int a0 = (int)r1, a1 = (a0 + 1) % (int)cd.size(); float fa = r1 - a0; int b0 = (int)r2, b1 = (b0 + 1) % (int)cd.size(); float fb = r2 - b0;
-                L += cd[a0] + (cd[a1] - cd[a0]) * fa; R += cd[b0] + (cd[b1] - cd[b0]) * fb;
+                L += (cd[a0] + (cd[a1] - cd[a0]) * fa) * hg; R += (cd[b0] + (cd[b1] - cd[b0]) * fb) * hg;
                 if (++cw >= (int)cd.size()) cw = 0;
             }
             // reverb
             if (revOn) {
                 convRun = true;
-                L += outB[0][cfill]; R += outB[1][cfill];
+                L += outB[0][cfill] * hg; R += outB[1][cfill] * hg;
                 inHist[CB + cfill] = x * revS;
                 if (++cfill >= CB) { convBlock(); cfill = 0; memcpy(inHist.data(), inHist.data() + CB, CB * sizeof(float)); }
             } else if (convRun) { convRun = false; cfill = 0; std::fill(inHist.begin(), inHist.end(), 0.f); memset(outB, 0, sizeof outB);

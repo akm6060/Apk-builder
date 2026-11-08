@@ -126,7 +126,7 @@ function on(id){const a=ctx(),sd=SN[two?id/100|0:0],t=a.currentTime;if(V[id]&&!V
 /* ---------- key events ---------- */
 let rec=null,playT=[];
 const hl=(id,o)=>keyEls[id].classList.toggle('dn',!!o),now=()=>Math.round(performance.now()-rec.t0);
-function start(id,u){try{if(!u)PB.add(id);if(!poly){Object.keys(V).forEach(cut);document.querySelectorAll('.dn').forEach(e=>e.classList.remove('dn'))}sus.delete(id);hl(id,1);on(id);if(u&&rec)rec.ev.push([now(),1,id])}catch(e){}}
+function start(id,u){try{if(!u)PB.add(id);if(!poly&&!glideOn()){Object.keys(V).forEach(cut);if(window.NQ&&NQ.hush)NQ.hush();document.querySelectorAll('.dn').forEach(e=>e.classList.remove('dn'))}sus.delete(id);hl(id,1);on(id);if(u&&rec)rec.ev.push([now(),1,id])}catch(e){}}
 function stop(id,u){if(u&&held(id))return;hl(id,0);if(!u)PB.delete(id);if(hold&&T.sn)sus.add(id);else off(id);if(u&&rec)rec.ev.push([now(),0,id])}
 function releaseAll(){Pt.clear();Tt.clear();PB.clear();Object.keys(V).forEach(k=>off(+k));document.querySelectorAll('.dn').forEach(e=>e.classList.remove('dn'));sus.clear()}
 setInterval(()=>{for(const k in V){const v=V[k],id=+k;if(!v.rel&&!held(id)&&!sus.has(id)&&!PB.has(id))off(id)}},200);
@@ -177,10 +177,20 @@ function recon(list,fresh,timer){
   takeOver(m.key,id);Tt.set(id,m.key);PY=m.g=kgain(m.key,t.clientY);try{start(m.key,1)}catch(e){logErr(e)}PY=1}
  if(cand.length&&window.NQ){try{window.NQ.dead(cand.map(m=>m.key).join(','))}catch(e){logErr(e)}}
 }
+/* finger positions read by Android itself (MainActivity.dispatchTouchEvent): the authoritative list when available */
+let JV=false,jN=0,domN=0,jPrev=new Set(),disN=0;
+function onJava(d){JV=true;const t0=jT=performance.now(),dpr=window.devicePixelRatio||1;
+ const list=d.length>2?d.slice(2).split(';').map(s=>{const a=s.split(',');return{identifier:'j'+a[0],clientX:+a[1]/dpr,clientY:+a[2]/dpr}}):[];
+ jN=list.length;const f=new Set(),cur=new Set();for(const t of list){cur.add(t.identifier);if(!jPrev.has(t.identifier))f.add('t'+t.identifier)}jPrev=cur;
+ lastTE=t0;snap=list;snapT=t0;try{recon(list,f)}catch(e){logErr(e)}}
 function onDead(csv){if(!csv)return;const d=csv.split(',').map(Number);
  for(const[id,key]of[...Tt])if(d.includes(key)&&V[key]&&performance.now()-V[key].t0>150){const m=tk.get(id);DG.heal++;PY=m?m.g:1;try{start(key,1)}catch(e){logErr(e)}PY=1}}
 {let lt=performance.now();setInterval(()=>{const n=performance.now(),g=n-lt;lt=n;if(!document.hidden&&g>150){DG.stall=(DG.stall||0)+1;DG.stallMax=Math.max(DG.stallMax||0,Math.round(g-50))}},50)}
-function tEv(e,fresh){lastTE=performance.now();{const lag=lastTE-e.timeStamp;if(lag>80&&lag<5000){DG.late=(DG.late||0)+1;DG.lagMax=Math.max(DG.lagMax||0,Math.round(lag))}}try{snap=[...e.touches].map(t=>({identifier:t.identifier,clientX:t.clientX,clientY:t.clientY}));snapT=lastTE;recon(snap,fresh)}catch(x){logErr(x)}}
+let jT=0;
+function tEv(e,fresh){if(JV){domN=e.touches.length;
+  if(e.type==='touchstart'){const t=performance.now(),fl=[...e.touches].map(x=>({identifier:x.identifier,clientX:x.clientX,clientY:x.clientY})),fr=new Set([...e.changedTouches].map(x=>'t'+x.identifier));
+   setTimeout(()=>{if(JV&&jT<t){JV=false;DG.jvOff=1;snap=[];jPrev=new Set();try{recon(fl,fr)}catch(x){logErr(x)}}},220)}
+  return}lastTE=performance.now();{const lag=lastTE-e.timeStamp;if(lag>80&&lag<5000){DG.late=(DG.late||0)+1;DG.lagMax=Math.max(DG.lagMax||0,Math.round(lag))}}try{snap=[...e.touches].map(t=>({identifier:t.identifier,clientX:t.clientX,clientY:t.clientY}));snapT=lastTE;recon(snap,fresh)}catch(x){logErr(x)}}
 addEventListener('touchstart',e=>{const f=new Set();for(const t of e.changedTouches)f.add('t'+t.identifier);tEv(e,f)},{passive:true});
 addEventListener('touchmove',e=>tEv(e),{passive:true});
 ['touchend','touchcancel'].forEach(n=>addEventListener(n,e=>tEv(e),{passive:true}));
@@ -193,9 +203,10 @@ kbs.addEventListener('pointerdown',e=>{if(!ptr(e))return;const h=hitAt(e.clientX
 ['pointerup','pointercancel'].forEach(n=>addEventListener(n,e=>{const id='p'+e.pointerId,k=Tt.get(id);if(k!==undefined){Tt.delete(id);DG.up++;stop(k,1)}if(e.pointerType!=='mouse'){tp.delete(e.pointerId);lastPU=performance.now()}},true));
 /* self-heal between events */
 setInterval(()=>{const n=performance.now();
- if(TE&&snap.length&&!tp.size&&lastPU>lastTE&&n-lastPU>250){snap=[];try{recon([])}catch(e){}return}   /* all fingers up per pointer events, touchend never came */
- if(snap.length&&n-snapT<4000&&!document.hidden)try{recon(snap,null,true)}catch(e){logErr(e)}},160);
-const offAll=()=>{snap=[];tk.clear();releaseAll()};
+ if(JV){if(domN!==jN){if(++disN===3)DG.dis=(DG.dis||0)+1}else disN=0}
+ if(!JV&&TE&&snap.length&&!tp.size&&lastPU>lastTE&&n-lastPU>250){snap=[];try{recon([])}catch(e){}return}   /* all fingers up per pointer events, touchend never came */
+ if(snap.length&&(JV||n-snapT<4000)&&!document.hidden)try{recon(snap,null,true)}catch(e){logErr(e)}},160);
+const offAll=()=>{snap=[];jPrev=new Set();tk.clear();releaseAll()};
 addEventListener('pagehide',offAll);
 addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('resize',layout);
@@ -296,7 +307,7 @@ setp.append(tw(v=>'Block white keys in black-key area: '+(v?'On':'Off'),'blk',()
  sl('Glide time (0 = off)',0,1,.01,()=>Z.gt,v=>{Z.gt=v;sZ()},' s'),
  mk('small',0,'Hold a key and touch another: the pitch slides to it; lift it and the pitch slides back. Neighbouring keys glide faster (1/3, 1/2, 2/3 of this time). Long-press the ⚙ button to switch glide on or off.'),
  mk('h3',0,'Pitch'),sl('Transpose',-12,12,1,()=>M.tr,v=>{M.tr=v;sM()},' st'),sl('Tuning A4',415,466,1,()=>M.at,v=>{M.at=v;sM()},' Hz'),
- mk('h3',0,'Touch check'),(()=>{const t=mk('small'),er=mk('small'),ai=mk('small'),r=mk('div','row'),b=mk('button',0,'Reset counters');const u=()=>{try{ai.textContent=window.NativeSynth&&NativeSynth.info?NativeSynth.info():''}catch(e){}t.textContent='Touches '+DG.down+' · played '+DG.played+' · ignored '+DG.ignored+' · lifted '+DG.up+' · self-healed '+DG.heal+' · slowest audio call '+(DG.bm||0)+' ms · late touches '+(DG.late||0)+' (worst '+(DG.lagMax||0)+' ms) · page stalls '+(DG.stall||0)+' (worst '+(DG.stallMax||0)+' ms) · down now '+Tt.size+(DG.why?' · last ignored: '+DG.why:'');er.textContent=ERR.length?'Errors: '+ERR.join(' | '):'No errors logged'};b.onclick=()=>{DG.down=DG.played=DG.ignored=DG.up=DG.heal=0;DG.bm=0;DG.why='';u()};setInterval(()=>{if(!$('#ov').classList.contains('open'))return;u()},500);u();r.append(t);r.append(er);r.append(ai);r.append(b);return r})(),mk('h3',0,'Audio'),sl('Preamp',-25,25,1,()=>Z.pa,v=>{Z.pa=v;sZ();fx()},' dB'),(()=>{const r=mk('div','row');if(!(window.NativeSynth&&NativeSynth.setOutput))return r;const L=['Fast (normal speaker sound)','Fast exclusive (lowest delay, raw speaker)','Rich (more delay)'],b=mk('button'),sh=()=>{b.textContent='Audio path: '+L[Z.op||0]};b.onclick=()=>{Z.op=((Z.op||0)+1)%3;sZ();try{NativeSynth.setOutput(Z.op)}catch(e){}sh()};sh();r.append(b);return r})(),(()=>{const r=mk('div','row'),b=mk('button',0,'Audio: '+(Z.lat==='interactive'?'Low latency':'Safe buffer')),s=mk('small',0,'Reloads the app');b.onclick=()=>{Z.lat=Z.lat==='interactive'?'balanced':'interactive';sZ();location.reload()};r.append(b,s);return r})());
+ mk('h3',0,'Touch check'),(()=>{const t=mk('small'),er=mk('small'),ai=mk('small'),r=mk('div','row'),b=mk('button',0,'Reset counters');const u=()=>{try{ai.textContent=window.NativeSynth&&NativeSynth.info?NativeSynth.info():''}catch(e){}t.textContent='Touches '+DG.down+' · played '+DG.played+' · ignored '+DG.ignored+' · lifted '+DG.up+' · self-healed '+DG.heal+' · slowest audio call '+(DG.bm||0)+' ms · late touches '+(DG.late||0)+' (worst '+(DG.lagMax||0)+' ms) · page stalls '+(DG.stall||0)+' (worst '+(DG.stallMax||0)+' ms) · Android finger list '+(JV?'on':DG.jvOff?'FAILED, using Chrome touches':'off')+' · Chrome/Android disagreements '+(DG.dis||0)+' · down now '+Tt.size+(DG.why?' · last ignored: '+DG.why:'');er.textContent=ERR.length?'Errors: '+ERR.join(' | '):'No errors logged'};b.onclick=()=>{DG.down=DG.played=DG.ignored=DG.up=DG.heal=DG.dis=DG.late=DG.lagMax=DG.stall=DG.stallMax=0;DG.bm=0;DG.why='';u()};setInterval(()=>{if(!$('#ov').classList.contains('open'))return;u()},500);u();r.append(t);r.append(er);r.append(ai);r.append(b);return r})(),mk('h3',0,'Audio'),sl('Preamp',-25,25,1,()=>Z.pa,v=>{Z.pa=v;sZ();fx()},' dB'),(()=>{const r=mk('div','row');if(!(window.NativeSynth&&NativeSynth.setOutput))return r;const L=['Fast (normal speaker sound)','Fast exclusive (lowest delay, raw speaker)','Rich (more delay)'],b=mk('button'),sh=()=>{b.textContent='Audio path: '+L[Z.op||0]};b.onclick=()=>{Z.op=((Z.op||0)+1)%3;sZ();try{NativeSynth.setOutput(Z.op)}catch(e){}sh()};sh();r.append(b);return r})(),(()=>{const r=mk('div','row'),b=mk('button',0,'Audio: '+(Z.lat==='interactive'?'Low latency':'Safe buffer')),s=mk('small',0,'Reloads the app');b.onclick=()=>{Z.lat=Z.lat==='interactive'?'balanced':'interactive';sZ();location.reload()};r.append(b,s);return r})());
 function setTwo(v){Z.two=two=!!v;$('#kw1').hidden=!v;$('#tg').hidden=!v;if(!v&&tg){tg=0;tb.forEach((x,j)=>x.classList.toggle('act',!j))}if(v&&!window._k2){window._k2=1;const s=SN[1],p=P[1];p[2].forEach((x,i)=>Object.assign(s.o[i],{w:x[0],f:x[1],v:x[2],t:x[3]||0,c:x[4]||0}));[s.e.a,s.e.d,s.e.s,s.e.r]=p[3];s.m=p[4]||0}layout();refresh()}
 /* ---------- toggles ---------- */
 [0,1,2,3].forEach(k=>tgl(B['o'+k],()=>T.o[k],v=>{T.o[k]=v?1:0;sT()},'synp',k));
@@ -339,9 +350,9 @@ function eqMag(j,f,dB){const sr=48000,A=Math.pow(10,dB/40),w=2*Math.PI*EF[j]/sr,
 const NS=window.NativeSynth;
 if(NS){
  const Q={port:null,pend:0};
- addEventListener('message',e=>{if(e.data==='skport'&&e.ports&&e.ports[0]){const p=e.ports[0];p.onmessage=ev=>{const d=String(ev.data);if(d[0]==='q'){Q.pend=0;onDead(d.slice(2))}};Q.port=p}});
+ addEventListener('message',e=>{if(e.data==='skport'&&e.ports&&e.ports[0]){const p=e.ports[0];p.onmessage=ev=>{const d=String(ev.data);if(d[0]==='q'){Q.pend=0;onDead(d.slice(2))}else if(d[0]==='T')onJava(d)};Q.port=p}});
  const send=(m,f)=>{if(Q.port){try{Q.port.postMessage(m);return}catch(e){Q.port=null}}f()};
- window.NQ={gain:(id,g)=>send('g|'+id+'|'+g,()=>NS.gain(id,g)),
+ window.NQ={hush:()=>send('h',()=>{if(NS.hush)NS.hush()}),gain:(id,g)=>send('g|'+id+'|'+g,()=>NS.gain(id,g)),
   dead:keys=>{if(Q.port){const n=performance.now();if(Q.pend&&n-Q.pend<600)return;Q.pend=n;send('q|'+keys,()=>{})}else onDead(String(NS.dead(keys)))}};
  AC={currentTime:0,state:'running',native:1};try{if(NS.setOutput&&Z.op)NS.setOutput(Z.op)}catch(e){}
  ctx=function(){return AC};

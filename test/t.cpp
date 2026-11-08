@@ -81,5 +81,13 @@ int main(){
       e.noteOn(59,s,powf(2.f,2/12.f),1.f,0.6f); run(62); double f1=freq(0.2); printf("adjacent (2 st) with T=0.6: %.1f Hz at 0.25-0.45 s (target %.1f)\n",f1,220*powf(2.f,2/12.f)); if(fabs(f1-246.9)>4) fails++;
       e.noteOff(59); e.noteOff(57); run(300); printf("all released: alive A=%d B=%d\n",e.alive(57),e.alive(59)); if(e.alive(57)||e.alive(59)) fails++;
       e.allOff(); run(300); }
+    // 10. hush (mono mode): old note + release tail + echo + reverb vanish at once; new note then plays cleanly
+    { gdef(g); g[G_ECHO]=.6f; g[G_ET]=300; g[G_EFB]=60; g[G_REV]=.8f; g[G_CH]=50; e.setGlobal(g); e.setReverb(3.f,30); std::this_thread::sleep_for(std::chrono::milliseconds(400)); run(50);
+      float s[NSOUND]; snd(s,0,.01f,.3f,5,2.0f,0,262,100); e.noteOn(60,s,1.f,1.f,0.f); run(100); e.noteOff(60); run(20);   // long release tail + wet tails
+      auto pre=run(10); float pm=0; for(float x:pre) pm=std::max(pm,fabsf(x));
+      e.hush(); run(8); auto post=run(40); float qm=0; for(float x:post) qm=std::max(qm,fabsf(x));
+      printf("hush: level before %.3f, 40 ms after (+~35 ms) %.5f\n",pm,qm); if(pm<0.02f||qm>0.002f) fails++;
+      e.noteOn(64,s,powf(2.f,4.f/12.f),1.f,0.f); auto nn=run(200); float nm=0; for(float x:nn) nm=std::max(nm,fabsf(x)); printf("new note after hush peak %.3f\n",nm); if(nm<0.1f) fails++;
+      gdef(g); e.setGlobal(g); e.allOff(); run(300); }
     puts(fails?"FAILED":"ENGINE TESTS PASSED"); return fails;
 }

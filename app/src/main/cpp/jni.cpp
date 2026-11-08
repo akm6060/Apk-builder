@@ -95,6 +95,7 @@ JNIEXPORT void JNICALL FN(noteOn)(JNIEnv* e, jclass, jint id, jfloatArray a, jfl
 }
 JNIEXPORT void JNICALL FN(noteGain)(JNIEnv*, jclass, jint id, jfloat g) { gEngine.noteGain(id, g); }
 JNIEXPORT jboolean JNICALL FN(alive)(JNIEnv*, jclass, jint id) { return gEngine.alive(id) ? JNI_TRUE : JNI_FALSE; }
+JNIEXPORT void JNICALL FN(hush)(JNIEnv*, jclass) { gEngine.hush(); }
 JNIEXPORT void JNICALL FN(noteOff)(JNIEnv*, jclass, jint id) { gEngine.noteOff(id); }
 JNIEXPORT void JNICALL FN(cut)(JNIEnv*, jclass, jint id) { gEngine.cut(id); }
 JNIEXPORT void JNICALL FN(allOff)(JNIEnv*, jclass) { gEngine.allOff(); }

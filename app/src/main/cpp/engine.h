@@ -66,6 +66,7 @@ public:
     // control (any thread)
     void noteOn(int id, const float* snd /*NSOUND*/, float ratio, float gain = 1.f, float glide = 0.f);
     void noteGain(int id, float g);
+    void hush();                                  // stop every note and its echo/reverb/chorus tail at once
     bool alive(int id);
     void noteOff(int id);
     void cut(int id);
@@ -91,6 +92,7 @@ private:
     float lfoPh = 0, vibS = 0, trmS = 0, wobS = 0, chS = 0, echoS = 0, revS = 0, preS = 1;
     float cutS = 20000, resS = 0.7f, etS = 0.35f, efbS = 0.35f, lrS = 5;
     float eqS[7] = {0,0,0,0,0,0,0};
+    float hg = 1.f; int hstate = 0;   // wet-return gain used to flush effect tails cleanly
     Biquad lp, eq[7];
 
     // echo

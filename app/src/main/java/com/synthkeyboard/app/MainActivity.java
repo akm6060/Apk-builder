@@ -8,6 +8,7 @@ import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowInsets;
@@ -43,6 +44,7 @@ public class MainActivity extends Activity {
                 case "f": NativeAudio.noteOff(Integer.parseInt(p[1])); break;
                 case "c": NativeAudio.cut(Integer.parseInt(p[1])); break;
                 case "a": NativeAudio.allOff(); break;
+                case "h": NativeAudio.hush(); break;
                 case "g": NativeAudio.noteGain(Integer.parseInt(p[1]), Float.parseFloat(p[2])); break;
                 case "G": NativeAudio.setGlobal(parse(p[1])); break;
                 case "d": NativeAudio.setDrone("1".equals(p[1]), Float.parseFloat(p[2])); break;
@@ -75,6 +77,7 @@ public class MainActivity extends Activity {
             for (String s : csv.split(",")) { try { int id = Integer.parseInt(s.trim()); if (!NativeAudio.alive(id)) sb.append(sb.length() > 0 ? "," : "").append(id); } catch (Exception e) { } }
             return sb.toString();
         }
+        @JavascriptInterface public void hush() { NativeAudio.hush(); }
         @JavascriptInterface public void off(int id) { NativeAudio.noteOff(id); }
         @JavascriptInterface public void cut(int id) { NativeAudio.cut(id); }
         @JavascriptInterface public void alloff() { NativeAudio.allOff(); }
@@ -83,6 +86,33 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void rev(double decay, double damp) { NativeAudio.setReverb((float) decay, (float) damp); }
         @JavascriptInterface public void setOutput(int mode) { NativeAudio.setOutput(mode); }
         @JavascriptInterface public String info() { return NativeAudio.loaded ? NativeAudio.info() : "Native audio not available"; }
+    }
+
+    private String lastTouch = "";
+    private final int[] loc = new int[2];
+
+    /** Every finger position straight from Android (before the WebView sees it), sent to the page as the full list. */
+    @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+        try {
+            WebMessagePort pt = port;
+            if (pt != null && web != null) {
+                int a = ev.getActionMasked(), skip = a == MotionEvent.ACTION_POINTER_UP ? ev.getActionIndex() : -1;
+                StringBuilder sb = new StringBuilder("T|");
+                if (a != MotionEvent.ACTION_UP && a != MotionEvent.ACTION_CANCEL) {
+                    web.getLocationInWindow(loc);
+                    boolean first = true;
+                    for (int i = 0; i < ev.getPointerCount(); i++) {
+                        if (i == skip) continue;
+                        if (!first) sb.append(';');
+                        first = false;
+                        sb.append(ev.getPointerId(i)).append(',').append((int) (ev.getX(i) - loc[0])).append(',').append((int) (ev.getY(i) - loc[1]));
+                    }
+                }
+                String s = sb.toString();
+                if (!s.equals(lastTouch)) { lastTouch = s; pt.postMessage(new WebMessage(s)); }
+            }
+        } catch (Throwable t) { }
+        return super.dispatchTouchEvent(ev);
     }
 
     @SuppressLint("SetJavaScriptEnabled")

@@ -11,6 +11,7 @@ final class NativeAudio {
     static native void noteGain(int id, float g);
     static native boolean alive(int id);
     static native void noteOff(int id);
+    static native void hush();
     static native void cut(int id);
     static native void allOff();
     static native void setGlobal(float[] g);
