@@ -25,6 +25,7 @@ class Player : public AudioStreamDataCallback, public AudioStreamErrorCallback {
     std::shared_ptr<AudioStream> stream;
     std::unique_ptr<LatencyTuner> tuner;
     bool exclusive = false;
+    bool paused = false;
 
     DataCallbackResult onAudioReady(AudioStream*, void* data, int32_t n) override {
         gEngine.render(static_cast<float*>(data), n);
@@ -33,7 +34,7 @@ class Player : public AudioStreamDataCallback, public AudioStreamErrorCallback {
     }
     // headphones plugged / unplugged, Bluetooth etc.: reopen on the new device
     void onErrorAfterClose(AudioStream*, Result err) override {
-        if (err == Result::ErrorDisconnected && gWanted) open();
+        if (err == Result::ErrorDisconnected && gWanted) { bool p = paused; open(); if (p) pause(); }
     }
 
     bool open() {
@@ -68,8 +69,9 @@ class Player : public AudioStreamDataCallback, public AudioStreamErrorCallback {
         std::lock_guard<std::mutex> lk(gStreamLock);
         if (stream) { stream->stop(); stream->close(); stream.reset(); }
     }
-    void pause() { std::lock_guard<std::mutex> lk(gStreamLock); if (stream) stream->requestStop(); }
+    void pause() { std::lock_guard<std::mutex> lk(gStreamLock); paused = true; if (stream) stream->requestStop(); }
     bool resume() {
+        paused = false;
         { std::lock_guard<std::mutex> lk(gStreamLock); if (stream) return stream->requestStart() == Result::OK; }
         return open();
     }

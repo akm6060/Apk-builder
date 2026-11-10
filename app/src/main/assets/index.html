@@ -126,7 +126,7 @@ function on(id){const a=ctx(),sd=SN[two?id/100|0:0],t=a.currentTime;if(V[id]&&!V
 /* ---------- key events ---------- */
 let rec=null,playT=[];
 const hl=(id,o)=>keyEls[id].classList.toggle('dn',!!o),now=()=>Math.round(performance.now()-rec.t0);
-function start(id,u){try{if(!u)PB.add(id);if(!poly&&!glideOn()){Object.keys(V).forEach(cut);if(window.NQ&&NQ.hush)NQ.hush();document.querySelectorAll('.dn').forEach(e=>e.classList.remove('dn'))}sus.delete(id);hl(id,1);on(id);if(u&&rec)rec.ev.push([now(),1,id])}catch(e){}}
+function start(id,u){try{const g0=PY;if(!u)PB.add(id);if(!poly&&!glideOn()){Object.keys(V).forEach(cut);if(window.NQ&&NQ.hush)NQ.hush();document.querySelectorAll('.dn').forEach(e=>e.classList.remove('dn'))}sus.delete(id);hl(id,1);on(id);if(u&&rec)rec.ev.push([now(),1,id,Math.round(g0*1000)/1000])}catch(e){logErr(e)}}
 function stop(id,u){if(u&&held(id))return;hl(id,0);if(!u)PB.delete(id);if(hold&&T.sn)sus.add(id);else off(id);if(u&&rec)rec.ev.push([now(),0,id])}
 function releaseAll(){Pt.clear();Tt.clear();PB.clear();Object.keys(V).forEach(k=>off(+k));document.querySelectorAll('.dn').forEach(e=>e.classList.remove('dn'));sus.clear()}
 setInterval(()=>{for(const k in V){const v=V[k],id=+k;if(!v.rel&&!held(id)&&!sus.has(id)&&!PB.has(id))off(id)}},200);
@@ -344,7 +344,7 @@ B.gr.classList.toggle('act',!!Z.gon);B.mp.onclick=()=>{poly=!poly;B.mp.textConte
 let ses=ld('kbSes',[]),playing=false;const mn=$('#menu');
 function endPlay(){playing=false;B.pl.textContent='▶';B.pl.classList.remove('act')}
 function stopPlay(){playT.forEach(clearTimeout);playT=[];[...PB].forEach(id=>stop(id,0));endPlay()}
-function play(s){stopPlay();playing=true;B.pl.textContent='■';B.pl.classList.add('act');s.ev.forEach(([t,k,id])=>playT.push(setTimeout(()=>k?start(id,0):stop(id,0),t)));playT.push(setTimeout(endPlay,(s.ev.length?s.ev[s.ev.length-1][0]:0)+400))}
+function play(s){stopPlay();playing=true;B.pl.textContent='■';B.pl.classList.add('act');s.ev.forEach(([t,k,id,g])=>playT.push(setTimeout(()=>{if(k){PY=g>=0&&g<=1?g:1;start(id,0);PY=1}else stop(id,0)},t)));playT.push(setTimeout(endPlay,(s.ev.length?s.ev[s.ev.length-1][0]:0)+400))}
 function addS(s){if(ses.length>=10)ses.shift();ses.push(s);sv('kbSes',ses);draw()}
 async function exp(s,i){mn.hidden=true;const txt=JSON.stringify(s);if(window.Android){Android.share(txt);return}
  try{const d=await claude.use('downloads');if(d){await d.save({filename:'keyboard-session-'+(i+1)+'.json',data:txt});return}}catch(e){if(e&&e.code==='declined')return}
@@ -359,7 +359,7 @@ B.pl.onclick=()=>{if(playing)stopPlay();else{mn.style.left=clamp(B.pl.offsetLeft
 document.addEventListener('pointerdown',e=>{if(!mn.hidden&&!mn.contains(e.target)&&e.target!==B.pl)mn.hidden=true});
 $('#fi').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
  r.onload=()=>{try{const s=JSON.parse(r.result);if(!Array.isArray(s.ev)||!s.ev.every(x=>Array.isArray(x)&&x.length>=3&&x[2]%100>=36&&x[2]%100<=107&&x[2]<300))throw 0;
-  addS({n:String(s.n||'import').slice(0,12),dur:+s.dur||(s.ev.length?s.ev[s.ev.length-1][0]/1000:0),ev:s.ev.map(x=>[+x[0],x[1]?1:0,+x[2]])})}catch(er){}};r.readAsText(f);e.target.value=''};
+  addS({n:String(s.n||'import').slice(0,12),dur:+s.dur||(s.ev.length?s.ev[s.ev.length-1][0]/1000:0),ev:s.ev.map(x=>x[1]?[+x[0],1,+x[2],x[3]>=0&&x[3]<=1?+x[3]:1]:[+x[0],0,+x[2]])})}catch(er){}};r.readAsText(f);e.target.value=''};
 addEventListener('pointerdown',()=>ctx(),{once:true});
 /* ---------- native low-latency audio (Android app). In a normal browser the WebAudio engine above is used. ---------- */
 function eqMag(j,f,dB){const sr=48000,A=Math.pow(10,dB/40),w=2*Math.PI*EF[j]/sr,c=Math.cos(w),s=Math.sin(w);let b0,b1,b2,a0,a1,a2;

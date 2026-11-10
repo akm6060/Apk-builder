@@ -38,6 +38,7 @@ struct Biquad {                 // transposed direct form II, double precision
 struct Ir {                     // partitioned impulse-response spectra (2 channels)
     int P = 0;
     std::vector<float> re[2], im[2];
+    Ir* nxt = nullptr;          // hand-over list (audio thread -> worker)
 };
 
 struct Voice {
@@ -92,6 +93,7 @@ private:
     float lfoPh = 0, vibS = 0, trmS = 0, wobS = 0, chS = 0, echoS = 0, revS = 0, preS = 1;
     float cutS = 20000, resS = 0.7f, etS = 0.35f, efbS = 0.35f, lrS = 5;
     float eqS[7] = {0,0,0,0,0,0,0};
+    float lastDec = 1.5f, lastDmp = 30.f;
     float hg = 1.f; int hstate = 0;   // wet-return gain used to flush effect tails cleanly
     Biquad lp, eq[7];
 
@@ -115,6 +117,7 @@ private:
     // IR worker
     std::thread wk; std::mutex wm; std::condition_variable wc; bool wreq = false, wquit = false; float wdec = 2, wdmp = 40;
     void worker();
+    void freeRetired();
     void ctlUpdate(float lfo);
     Voice* startVoice(const Ev& e);
     struct GS { int id; float ratio, gain; } gs[24]; int gn = 0, gvi = -1; float gT = 0;

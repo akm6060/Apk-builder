@@ -140,8 +140,14 @@ public class MainActivity extends Activity {
 
         ctl = new HandlerThread("synth-ctl"); ctl.start(); ctlH = new Handler(ctl.getLooper());
         web.setWebViewClient(new WebViewClient() {
+            @Override public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail d) {
+                // the page's process died: rebuild the view instead of crashing the app
+                runOnUiThread(() -> recreate());
+                return true;
+            }
             @Override public void onPageFinished(WebView v, String url) {
                 try {
+                    if (port != null) { try { port.close(); } catch (Throwable t) { } }
                     WebMessagePort[] pp = v.createWebMessageChannel();
                     port = pp[0];
                     port.setWebMessageCallback(new WebMessagePort.WebMessageCallback() {
@@ -220,6 +226,8 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         if (web != null) { web.loadUrl("about:blank"); web.destroy(); web = null; }
+        if (port != null) { try { port.close(); } catch (Throwable t) { } port = null; }
+        if (ctl != null) { ctl.quitSafely(); ctl = null; }
         if (NativeAudio.loaded) NativeAudio.stop();
         super.onDestroy();
     }

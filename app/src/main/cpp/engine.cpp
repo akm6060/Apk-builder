@@ -7,6 +7,7 @@ namespace sk {
 static const float PI = 3.14159265358979f;
 static float SINT[2049];
 static inline float clampf(float x, float a, float b) { return x < a ? a : x > b ? b : x; }
+static inline float fin(float x, float d, float lo, float hi) { return std::isfinite(x) ? (x < lo ? lo : x > hi ? hi : x) : d; }   // finite and bounded, else default
 static inline float blep(float t, float dt) {
     if (t < dt) { t /= dt; return t + t - t * t - 1.f; }
     if (t > 1.f - dt) { t = (t - 1.f) / dt; return t * t + t + t + 1.f; }
@@ -52,8 +53,9 @@ static const float EQF[7] = {128, 256, 512, 1000, 3000, 6000, 9000};
 
 // ---------------------------------------------------------------------------------------------
 void Engine::init(float rate) {
+    gn = 0; gvi = -1; hg = 1.f; hstate = 0;
     if (inited && rate == sr) { for (auto& x : v) x = Voice(); rt.store(rh.load()); return; }
-    inited = true; sr = rate;
+    bool changed = inited; inited = true; sr = rate;
     for (int i = 0; i <= 2048; i++) SINT[i] = sinf(2 * PI * i / 2048.f);
     for (int i = 0; i < NGLOB; i++) G[i].store(0);
     G[G_CUT] = 100; G[G_LR] = 5; G[G_ET] = 350; G[G_EFB] = 35; G[G_PRE] = 0;
@@ -72,11 +74,12 @@ void Engine::init(float rate) {
     fdlRe.assign((size_t)pmax * (CB + 1), 0); fdlIm.assign((size_t)pmax * (CB + 1), 0);
     inHist.assign(CN, 0); cfill = 0; memset(outB, 0, sizeof outB); outPos = 0; fpos = 0;
     if (!wk.joinable()) wk = std::thread(&Engine::worker, this);
+    if (changed) setReverb(lastDec, lastDmp);   // the room is rebuilt for the new sample rate
 }
 Engine::~Engine() {
     { std::lock_guard<std::mutex> l(wm); wquit = true; wreq = true; }
     wc.notify_all(); if (wk.joinable()) wk.join();
-    delete curIr; delete newIr.load(); delete retired.load();
+    delete curIr; delete newIr.load(); freeRetired();
 }
 
 void Engine::push(const Ev& e) {
@@ -85,17 +88,26 @@ void Engine::push(const Ev& e) {
     if (h - t >= RN) return;
     ring[h % RN] = e; rh.store(h + 1, std::memory_order_release);
 }
-void Engine::noteOn(int id, const float* s, float ratio, float gain, float glide) { Ev e; e.type = 1; e.id = id; e.ratio = ratio; e.gain = gain < 0 ? 0 : gain > 1 ? 1 : gain; e.gl = glide; memcpy(e.snd, s, sizeof(float) * NSOUND); push(e); }
-void Engine::noteGain(int id, float g) { Ev e; memset(&e, 0, sizeof e); e.type = 5; e.id = id; e.gain = g < 0 ? 0 : g > 1 ? 1 : g; push(e); }
+void Engine::noteOn(int id, const float* s, float ratio, float gain, float glide) {
+    Ev e; e.type = 1; e.id = id; e.ratio = fin(ratio, 1.f, 1.f / 64, 64.f); e.gain = fin(gain, 1.f, 0.f, 1.f); e.gl = fin(glide, 0.f, 0.f, 5.f);
+    for (int i = 0; i < NSOUND; i++) e.snd[i] = std::isfinite(s[i]) ? s[i] : 0.f;
+    float* d = e.snd; d[0] = fin(d[0], 0, 0, 2); d[1] = fin(d[1], 0, 0, 30); d[2] = fin(d[2], 0, 0, 30); d[3] = fin(d[3], 5, 0, 100); d[4] = fin(d[4], 0, 0, 30);
+    for (int k = 0; k < 4; k++) { float* o = d + 5 + k * 6; o[0] = o[0] > 0.5f ? 1.f : 0.f; o[1] = fin(o[1], 0, 0, 3); o[2] = fin(o[2], 0, 0, 20000); o[3] = fin(o[3], 0, 0, 100); o[4] = fin(o[4], 0, -48, 48); o[5] = fin(o[5], 0, -1200, 1200); }
+    push(e); }
+void Engine::noteGain(int id, float g) { Ev e; memset(&e, 0, sizeof e); e.type = 5; e.id = id; e.gain = fin(g, 1.f, 0.f, 1.f); push(e); }
 void Engine::hush() { Ev e; memset(&e, 0, sizeof e); e.type = 6; push(e); }
 bool Engine::alive(int id) { if (gvoice()) for (int i = 0; i < gn; i++) if (gs[i].id == id) return true;
     for (auto& q : v) if (q.act && q.id == id && !q.fast && q.stage != 5 && q.stage != 4) return true; return false; }
 void Engine::noteOff(int id) { Ev e; memset(&e, 0, sizeof e); e.type = 2; e.id = id; push(e); }
 void Engine::cut(int id) { Ev e; memset(&e, 0, sizeof e); e.type = 3; e.id = id; push(e); }
 void Engine::allOff() { Ev e; memset(&e, 0, sizeof e); e.type = 4; push(e); }
-void Engine::setGlobal(const float* g) { for (int i = 0; i < NGLOB; i++) G[i].store(g[i], std::memory_order_relaxed); }
-void Engine::setDrone(bool on, float base) { droneBase.store(base); droneOn.store(on ? 1 : 0); }
+void Engine::setGlobal(const float* g) {
+    static const float lo[NGLOB] = {0, 0, 0.05f, 0, 0, 0, 0, -40, -40, -40, -40, -40, -40, -40, 0, 0, 0, 0, -30, 0, 0, 0, 0, 0};
+    static const float hi[NGLOB] = {100, 40, 30, 600, 100, 100, 100, 40, 40, 40, 40, 40, 40, 40, 1.5f, 1000, 100, 1.5f, 40, 0, 0, 0, 0, 0};
+    for (int i = 0; i < NGLOB; i++) G[i].store(fin(g[i], i == G_CUT ? 100.f : i == G_LR ? 5.f : i == G_ET ? 350.f : 0.f, lo[i], hi[i]), std::memory_order_relaxed); }
+void Engine::setDrone(bool on, float base) { droneBase.store(fin(base, 130.f, 20.f, 2000.f)); droneOn.store(on ? 1 : 0); }
 void Engine::setReverb(float decay, float damp) {
+    decay = fin(decay, 1.f, 0.05f, 3.2f); damp = fin(damp, 30.f, 0.f, 100.f); lastDec = decay; lastDmp = damp;
     { std::lock_guard<std::mutex> l(wm); wdec = decay; wdmp = damp; wreq = true; }
     wc.notify_all();
 }
@@ -206,12 +218,13 @@ void Engine::fftCore(float* re, float* im) {
             }
     }
 }
+void Engine::freeRetired() { Ir* r = retired.exchange(nullptr, std::memory_order_acquire); while (r) { Ir* n = r->nxt; delete r; r = n; } }
 void Engine::worker() {
     flushDenormals();
     for (;;) {
         float dec, dmp;
         { std::unique_lock<std::mutex> l(wm); wc.wait(l, [&] { return wreq; }); if (wquit) return; wreq = false; dec = wdec; dmp = wdmp; }
-        delete retired.exchange(nullptr);
+        freeRetired();
         int n = (int)(sr * std::max(0.05f, std::min(dec, 3.2f)));
         std::vector<float> ch[2]; uint32_t rs = 0x9e3779b9u ^ (uint32_t)(dec * 1000);
         float a = 1.f - dmp / 100.f * 0.92f; double sum = 0;
@@ -242,7 +255,7 @@ void Engine::worker() {
 }
 void Engine::convBlock() {
     Ir* n = newIr.exchange(nullptr);
-    if (n) { Ir* old = curIr; curIr = n; retired.store(old); std::fill(fdlRe.begin(), fdlRe.end(), 0.f); std::fill(fdlIm.begin(), fdlIm.end(), 0.f); }
+    if (n) { Ir* old = curIr; curIr = n; if (old) { old->nxt = retired.load(std::memory_order_relaxed); while (!retired.compare_exchange_weak(old->nxt, old, std::memory_order_release, std::memory_order_relaxed)) {} } std::fill(fdlRe.begin(), fdlRe.end(), 0.f); std::fill(fdlIm.begin(), fdlIm.end(), 0.f); }
     if (!curIr) { memset(outB, 0, sizeof outB); return; }
     memcpy(inRe.data(), inHist.data(), CN * sizeof(float)); std::fill(inIm.begin(), inIm.end(), 0.f);
     fftCore(inRe.data(), inIm.data());
@@ -377,7 +390,7 @@ void Engine::render(float* out, int frames) {
             // echo
             {
                 float dsm = etS * sr; float rp = (float)dw - dsm; while (rp < 0) rp += (float)dl.size();
-                int i0 = (int)rp; float fr = rp - i0; int i1 = i0 + 1; if (i1 >= (int)dl.size()) i1 = 0;
+                int i0 = (int)rp; float fr = rp - i0; if (i0 >= (int)dl.size()) { i0 -= (int)dl.size(); fr = 0; } int i1 = i0 + 1; if (i1 >= (int)dl.size()) i1 = 0;
                 float w = dl[i0] + (dl[i1] - dl[i0]) * fr;
                 dl[dw] = echoS * x + efbS * efl.run(w); if (++dw >= (int)dl.size()) dw = 0;
                 L += w * hg; R += w * hg;
@@ -389,6 +402,7 @@ void Engine::render(float* out, int frames) {
                 cd[cw] = chS * x; 
                 float tl = (0.014f + 0.003f * m) * sr, tr_ = (0.019f - 0.003f * m) * sr;
                 float r1 = (float)cw - tl; if (r1 < 0) r1 += (float)cd.size(); float r2 = (float)cw - tr_; if (r2 < 0) r2 += (float)cd.size();
+                const float csz = (float)cd.size(); if (r1 >= csz) r1 -= csz; if (r2 >= csz) r2 -= csz;   // float rounding can land exactly on the buffer size
                 int a0 = (int)r1, a1 = (a0 + 1) % (int)cd.size(); float fa = r1 - a0; int b0 = (int)r2, b1 = (b0 + 1) % (int)cd.size(); float fb = r2 - b0;
                 L += (cd[a0] + (cd[a1] - cd[a0]) * fa) * hg; R += (cd[b0] + (cd[b1] - cd[b0]) * fb) * hg;
                 if (++cw >= (int)cd.size()) cw = 0;
@@ -401,8 +415,15 @@ void Engine::render(float* out, int frames) {
                 if (++cfill >= CB) { convBlock(); cfill = 0; memcpy(inHist.data(), inHist.data() + CB, CB * sizeof(float)); }
             } else if (convRun) { convRun = false; cfill = 0; std::fill(inHist.begin(), inHist.end(), 0.f); memset(outB, 0, sizeof outB);
                 std::fill(fdlRe.begin(), fdlRe.end(), 0.f); std::fill(fdlIm.begin(), fdlIm.end(), 0.f); }
-            out[(done + i) * 2] = tanhf(L * preS);
-            out[(done + i) * 2 + 1] = tanhf(R * preS);
+            float oL = tanhf(L * preS), oR = tanhf(R * preS);
+            if (!(fabsf(oL) <= 1.f) || !(fabsf(oR) <= 1.f)) {   // NaN/inf must never get stuck in a filter: reset every recursive state
+                oL = oR = 0; lp = Biquad(); for (auto& q : eq) q = Biquad(); efl = Biquad(); dlp = Biquad(); lowpassC(efl, 3500, 1, sr); lowpassC(dlp, 900, 1, sr);
+                std::fill(dl.begin(), dl.end(), 0.f); std::fill(cd.begin(), cd.end(), 0.f); std::fill(inHist.begin(), inHist.end(), 0.f); cfill = 0; memset(outB, 0, sizeof outB);
+                std::fill(fdlRe.begin(), fdlRe.end(), 0.f); std::fill(fdlIm.begin(), fdlIm.end(), 0.f);
+                trmS = 0; echoS = revS = chS = 0; for (auto& q : v) q.act = false; gn = 0; gvi = -1; dg = 0;
+            }
+            out[(done + i) * 2] = oL;
+            out[(done + i) * 2 + 1] = oR;
         }
         done += nF;
     }
